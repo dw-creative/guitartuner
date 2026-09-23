@@ -42,6 +42,113 @@
     }
     h1 { margin:0 0 4px; text-align:center; font-size:20px; }
     .subtitle { text-align:center; color:var(--muted); font-size:13px; margin-bottom:26px; }
+
+    .mode-switch {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:6px;
+      padding:5px;
+      margin:0 0 20px;
+      background:#111113;
+      border:1px solid #303034;
+      border-radius:15px;
+    }
+    .mode-btn {
+      min-height:40px;
+      border:0;
+      border-radius:11px;
+      background:transparent;
+      color:var(--muted);
+      font-size:14px;
+      font-weight:700;
+    }
+    .mode-btn.active {
+      background:#343438;
+      color:var(--text);
+    }
+    .beginner-panel {
+      margin:0 0 20px;
+      padding:14px;
+      border:1px solid #303034;
+      border-radius:18px;
+      background:#151517;
+    }
+    .beginner-title {
+      text-align:center;
+      font-size:13px;
+      font-weight:700;
+      margin-bottom:10px;
+      color:#d1d1d6;
+    }
+    .strings {
+      display:grid;
+      grid-template-columns:repeat(6,1fr);
+      gap:6px;
+    }
+    .string-btn {
+      min-width:0;
+      min-height:72px;
+      padding:7px 2px 6px;
+      border:1px solid #3a3a3c;
+      border-radius:12px;
+      background:#232326;
+      color:var(--text);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:1px;
+    }
+    .string-btn strong {
+      font-size:11px;
+      color:var(--muted);
+      font-weight:700;
+    }
+    .string-btn span {
+      font-size:24px;
+      line-height:1;
+      font-weight:800;
+    }
+    .string-btn small {
+      display:block;
+      min-height:20px;
+      font-size:8px;
+      line-height:10px;
+      color:var(--muted);
+      text-align:center;
+    }
+    .string-btn.active {
+      border-color:var(--accent);
+      background:rgba(10,132,255,.16);
+      box-shadow:inset 0 0 0 1px var(--accent);
+    }
+    .target-text {
+      margin-top:10px;
+      text-align:center;
+      color:var(--muted);
+      font-size:12px;
+    }
+    .beginner-command {
+      margin:16px 0 4px;
+      padding:17px 14px;
+      border-radius:17px;
+      background:#242427;
+      border:1px solid #38383b;
+      text-align:center;
+    }
+    .command-main {
+      font-size:25px;
+      font-weight:850;
+      letter-spacing:-.02em;
+    }
+    .command-sub {
+      margin-top:5px;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.35;
+    }
+    .hidden { display:none !important; }
+
     .note {
       text-align:center;
       font-size:clamp(78px,24vw,120px);
@@ -127,6 +234,36 @@
   <h1>GuitarTuner</h1>
   <div class="subtitle">Chromatisch · optimiert für Gitarre</div>
 
+  <div class="mode-switch" role="group" aria-label="Modus">
+    <button id="normalMode" class="mode-btn active" type="button">Normal</button>
+    <button id="beginnerMode" class="mode-btn" type="button">Anfänger</button>
+  </div>
+
+  <div id="beginnerPanel" class="beginner-panel hidden">
+    <div class="beginner-title">Welche Saite stimmst du?</div>
+    <div class="strings" id="strings">
+      <button class="string-btn active" type="button" data-freq="82.4069" data-label="E2">
+        <strong>1</strong><span>E</span><small>dick · tief</small>
+      </button>
+      <button class="string-btn" type="button" data-freq="110.0000" data-label="A2">
+        <strong>2</strong><span>A</span><small></small>
+      </button>
+      <button class="string-btn" type="button" data-freq="146.8324" data-label="D3">
+        <strong>3</strong><span>D</span><small></small>
+      </button>
+      <button class="string-btn" type="button" data-freq="195.9977" data-label="G3">
+        <strong>4</strong><span>G</span><small></small>
+      </button>
+      <button class="string-btn" type="button" data-freq="246.9417" data-label="H3">
+        <strong>5</strong><span>H</span><small></small>
+      </button>
+      <button class="string-btn" type="button" data-freq="329.6276" data-label="E4">
+        <strong>6</strong><span>E</span><small>dünn · hoch</small>
+      </button>
+    </div>
+    <div id="targetText" class="target-text">Ziel: Saite 1 · tiefes E · 82,4 Hz</div>
+  </div>
+
   <div id="note" class="note">—</div>
   <div id="frequency" class="frequency">Mikrofon noch nicht aktiv</div>
 
@@ -139,6 +276,11 @@
 
   <div class="scale"><span>−50</span><span>0</span><span>+50 Cent</span></div>
   <div id="cents" class="cents">—</div>
+
+  <div id="beginnerCommand" class="beginner-command hidden">
+    <div id="commandMain" class="command-main">Saite anschlagen</div>
+    <div id="commandSub" class="command-sub">Das Stimmgerät sagt dir, in welche Richtung du drehen musst.</div>
+  </div>
 
   <div class="level-wrap">
     <div class="level-row">
@@ -176,6 +318,14 @@
   const a4Input = document.getElementById("a4");
   const levelBar = document.getElementById("levelBar");
   const levelText = document.getElementById("levelText");
+  const normalModeBtn = document.getElementById("normalMode");
+  const beginnerModeBtn = document.getElementById("beginnerMode");
+  const beginnerPanel = document.getElementById("beginnerPanel");
+  const beginnerCommand = document.getElementById("beginnerCommand");
+  const commandMain = document.getElementById("commandMain");
+  const commandSub = document.getElementById("commandSub");
+  const targetText = document.getElementById("targetText");
+  const stringButtons = [...document.querySelectorAll(".string-btn")];
 
   const noteNames = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","H"];
 
@@ -191,6 +341,10 @@
   let lastAnalysis = 0;
   let lastGoodAt = 0;
   let smoothedPitch = null;
+  let mode = "normal";
+  let targetFreq = 82.4069;
+  let targetLabel = "E2";
+  let targetString = 1;
 
   function getA4() {
     const v = parseFloat(a4Input.value);
@@ -202,6 +356,11 @@
   }
 
   function updateDisplay(freq) {
+    if (mode === "beginner") {
+      updateBeginnerDisplay(freq);
+      return;
+    }
+
     const midi = frequencyToMidi(freq, getA4());
     const nearest = Math.round(midi);
     const cents = Math.round((midi - nearest) * 100);
@@ -227,10 +386,66 @@
       : (cents < 0 ? "Zu tief – etwas höher stimmen." : "Zu hoch – etwas tiefer stimmen.");
   }
 
+  function updateBeginnerDisplay(freq) {
+    // Compare directly with the selected open-string target. This still gives
+    // the correct direction even when the detected note is several semitones away.
+    const centsFromTarget = 1200 * Math.log2(freq / targetFreq);
+    const absCents = Math.abs(centsFromTarget);
+    const inTune = absCents <= 5;
+
+    noteEl.textContent = targetLabel.replace(/[0-9]/g, "");
+    frequencyEl.textContent = `gemessen ${freq.toFixed(1)} Hz · Ziel ${targetFreq.toFixed(1)} Hz`;
+
+    // Needle shows the final ±50 cent range. If farther away it stays pinned
+    // to one side while the large command remains unambiguous.
+    const limited = Math.max(-50, Math.min(50, centsFromTarget));
+    needleEl.style.transform = `translateX(-50%) rotate(${limited * 0.9}deg)`;
+
+    if (inTune) {
+      centsEl.textContent = "✓ richtig gestimmt";
+      commandMain.textContent = "PASST";
+      commandSub.textContent = `Saite ${targetString} ist richtig gestimmt.`;
+      needleEl.style.background = "var(--ok)";
+      needleEl.style.boxShadow = "0 0 16px rgba(52,199,89,.55)";
+      statusEl.textContent = "Fertig – die Saite stimmt.";
+      return;
+    }
+
+    needleEl.style.background = "var(--warn)";
+    needleEl.style.boxShadow = "0 0 16px rgba(255,159,10,.4)";
+
+    if (centsFromTarget < 0) {
+      commandMain.textContent = "SPANNEN ↑";
+      commandSub.textContent = absCents > 100
+        ? "Die Saite ist deutlich zu tief. Langsam spannen, bis du näher am Zielton bist."
+        : "Die Saite ist zu tief. Etwas spannen.";
+      statusEl.textContent = "Ton ist zu tief – Saite spannen.";
+    } else {
+      commandMain.textContent = "LOCKERN ↓";
+      commandSub.textContent = absCents > 100
+        ? "Die Saite ist deutlich zu hoch. Langsam lockern, bis du näher am Zielton bist."
+        : "Die Saite ist zu hoch. Etwas lockern.";
+      statusEl.textContent = "Ton ist zu hoch – Saite lockern.";
+    }
+
+    if (absCents >= 100) {
+      const semitones = absCents / 100;
+      centsEl.textContent = semitones >= 2
+        ? `${semitones.toFixed(1)} Halbtöne vom Ziel entfernt`
+        : `${Math.round(absCents)} Cent vom Ziel entfernt`;
+    } else {
+      centsEl.textContent = `${Math.round(absCents)} Cent vom Ziel entfernt`;
+    }
+  }
+
   function clearPitchDisplay(message) {
-    noteEl.textContent = "—";
+    noteEl.textContent = mode === "beginner" ? targetLabel.replace(/[0-9]/g, "") : "—";
     frequencyEl.textContent = "Kein stabiler Ton erkannt";
     centsEl.textContent = "—";
+    if (mode === "beginner") {
+      commandMain.textContent = "SAITE ANSCHLAGEN";
+      commandSub.textContent = `Saite ${targetString} einzeln anschlagen und kurz ausklingen lassen.`;
+    }
     needleEl.style.transform = "translateX(-50%) rotate(0deg)";
     smoothedPitch = null;
     if (message) statusEl.textContent = message;
@@ -424,7 +639,9 @@
       buffer = new Float32Array(analyser.fftSize);
       running = true;
       toggleBtn.textContent = "Mikrofon stoppen";
-      statusEl.textContent = "Spiele einen einzelnen Ton und lass ihn kurz ausschwingen.";
+      statusEl.textContent = mode === "beginner"
+        ? `Saite ${targetString} einzeln anschlagen.`
+        : "Spiele einen einzelnen Ton und lass ihn kurz ausschwingen.";
       lastGoodAt = performance.now();
       lastAnalysis = 0;
       animationId = requestAnimationFrame(tick);
@@ -462,6 +679,71 @@
     frequencyEl.textContent = "Mikrofon nicht aktiv";
     toggleBtn.textContent = "Mikrofon starten";
   }
+
+
+  function setMode(nextMode) {
+    mode = nextMode;
+    const beginner = mode === "beginner";
+
+    normalModeBtn.classList.toggle("active", !beginner);
+    beginnerModeBtn.classList.toggle("active", beginner);
+    beginnerPanel.classList.toggle("hidden", !beginner);
+    beginnerCommand.classList.toggle("hidden", !beginner);
+
+    smoothedPitch = null;
+    needleEl.style.transform = "translateX(-50%) rotate(0deg)";
+
+    if (beginner) {
+      noteEl.textContent = targetLabel.replace(/[0-9]/g, "");
+      frequencyEl.textContent = `Ziel ${targetFreq.toFixed(1)} Hz`;
+      centsEl.textContent = "—";
+      commandMain.textContent = "SAITE ANSCHLAGEN";
+      commandSub.textContent = `Saite ${targetString} einzeln anschlagen und kurz ausklingen lassen.`;
+      statusEl.textContent = running
+        ? "Das Stimmgerät zeigt dir nur noch SPANNEN, LOCKERN oder PASST."
+        : "Mikrofon starten und dann die ausgewählte Saite einzeln anschlagen.";
+    } else {
+      noteEl.textContent = "—";
+      frequencyEl.textContent = running ? "Spiele einen einzelnen Ton." : "Mikrofon nicht aktiv";
+      centsEl.textContent = "—";
+      statusEl.textContent = running
+        ? "Spiele einen einzelnen Ton und lass ihn kurz ausschwingen."
+        : "Tippe auf „Mikrofon starten“ und erlaube den Mikrofonzugriff.";
+    }
+  }
+
+  normalModeBtn.addEventListener("click", () => setMode("normal"));
+  beginnerModeBtn.addEventListener("click", () => setMode("beginner"));
+
+  stringButtons.forEach((btn, index) => {
+    btn.addEventListener("click", () => {
+      stringButtons.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      targetFreq = parseFloat(btn.dataset.freq);
+      targetLabel = btn.dataset.label;
+      targetString = index + 1;
+
+      const names = {
+        1: "tiefes E · dickste Saite",
+        2: "A",
+        3: "D",
+        4: "G",
+        5: "H",
+        6: "hohes E · dünnste Saite"
+      };
+      targetText.textContent =
+        `Ziel: Saite ${targetString} · ${names[targetString]} · ${targetFreq.toFixed(1)} Hz`;
+
+      smoothedPitch = null;
+      noteEl.textContent = targetLabel.replace(/[0-9]/g, "");
+      frequencyEl.textContent = `Ziel ${targetFreq.toFixed(1)} Hz`;
+      centsEl.textContent = "—";
+      commandMain.textContent = "SAITE ANSCHLAGEN";
+      commandSub.textContent = `Saite ${targetString} einzeln anschlagen und kurz ausklingen lassen.`;
+      needleEl.style.transform = "translateX(-50%) rotate(0deg)";
+    });
+  });
 
   toggleBtn.addEventListener("click", () => running ? stop() : start());
 
