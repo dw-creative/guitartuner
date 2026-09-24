@@ -1,462 +1,949 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#111111">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0d0d0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GuitarTuner">
   <title>GuitarTuner</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg:#111;
-      --panel:#1c1c1e;
-      --text:#f5f5f7;
-      --muted:#9b9ba0;
-      --ok:#34c759;
-      --warn:#ff9f0a;
-      --accent:#0a84ff;
-      --line:#3a3a3c;
+      --bg: #0d0d0f;
+      --panel: #19191c;
+      --panel-2: #222226;
+      --text: #f5f5f7;
+      --muted: #98989f;
+      --line: #35353a;
+      --accent: #0a84ff;
+      --ok: #30d158;
+      --warn: #ff9f0a;
     }
-    * { box-sizing:border-box; }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      overscroll-behavior: none;
+      touch-action: manipulation;
+    }
+
     body {
-      margin:0;
-      min-height:100svh;
-      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-      background:radial-gradient(circle at top,#242428 0,var(--bg) 45%);
-      color:var(--text);
-      display:grid;
-      place-items:center;
-      padding:max(20px,env(safe-area-inset-top))
-              max(18px,env(safe-area-inset-right))
-              max(22px,env(safe-area-inset-bottom))
-              max(18px,env(safe-area-inset-left));
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
     }
+
+    button, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+
+    .shell {
+      height: 100dvh;
+      min-height: 100svh;
+      display: flex;
+      justify-content: center;
+      padding:
+        max(8px, env(safe-area-inset-top))
+        max(12px, env(safe-area-inset-right))
+        max(8px, env(safe-area-inset-bottom))
+        max(12px, env(safe-area-inset-left));
+      background: radial-gradient(circle at 50% -10%, #242429 0, var(--bg) 48%);
+    }
+
     .app {
-      width:min(100%,520px);
-      background:rgba(28,28,30,.94);
-      border:1px solid #303034;
-      border-radius:28px;
-      padding:24px;
-      box-shadow:0 22px 70px rgba(0,0,0,.35);
-      backdrop-filter:blur(18px);
+      width: min(100%, 500px);
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
     }
-    h1 { margin:0 0 4px; text-align:center; font-size:20px; }
-    .subtitle { text-align:center; color:var(--muted); font-size:13px; margin-bottom:26px; }
+
+    .topbar {
+      min-height: 42px;
+      display: grid;
+      grid-template-columns: 42px 1fr 42px;
+      align-items: center;
+    }
+
+    .brand-lockup {
+      text-align: center;
+      line-height: 1;
+    }
+
+    .brand {
+      font-size: 17px;
+      font-weight: 750;
+      letter-spacing: -0.02em;
+    }
+
+    .maker {
+      margin-top: 4px;
+      color: #77777d;
+      font-size: 9px;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+    }
+
+    .mic-state {
+      width: 42px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 10px;
+      visibility: hidden;
+    }
+
+    .mic-state.active { visibility: visible; }
+    .mic-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 8px rgba(48, 209, 88, .6);
+    }
+
+    .icon-button {
+      width: 38px;
+      height: 38px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1;
+      display: grid;
+      place-items: center;
+      justify-self: end;
+    }
+
+    .icon-button:active { background: var(--panel-2); }
 
     .mode-switch {
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:6px;
-      padding:5px;
-      margin:0 0 20px;
-      background:#111113;
-      border:1px solid #303034;
-      border-radius:15px;
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid #29292e;
+      background: #141416;
+      border-radius: 14px;
     }
+
     .mode-btn {
-      min-height:40px;
-      border:0;
-      border-radius:11px;
-      background:transparent;
-      color:var(--muted);
-      font-size:14px;
-      font-weight:700;
+      height: 38px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
     }
+
     .mode-btn.active {
-      background:#343438;
-      color:var(--text);
+      background: #303035;
+      color: var(--text);
     }
+
     .beginner-panel {
-      margin:0 0 20px;
-      padding:14px;
-      border:1px solid #303034;
-      border-radius:18px;
-      background:#151517;
+      flex: 0 0 auto;
     }
-    .beginner-title {
-      text-align:center;
-      font-size:13px;
-      font-weight:700;
-      margin-bottom:10px;
-      color:#d1d1d6;
-    }
+
     .strings {
-      display:grid;
-      grid-template-columns:repeat(6,1fr);
-      gap:6px;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 5px;
     }
+
     .string-btn {
-      min-width:0;
-      min-height:72px;
-      padding:7px 2px 6px;
-      border:1px solid #3a3a3c;
-      border-radius:12px;
-      background:#232326;
-      color:var(--text);
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      gap:1px;
+      height: 61px;
+      min-width: 0;
+      padding: 5px 1px;
+      border: 1px solid #333338;
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
     }
-    .string-btn strong {
-      font-size:11px;
-      color:var(--muted);
-      font-weight:700;
+
+    .string-btn .num {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
     }
-    .string-btn span {
-      font-size:24px;
-      line-height:1;
-      font-weight:800;
+
+    .string-btn .letter {
+      margin-top: 3px;
+      font-size: 23px;
+      font-weight: 850;
+      line-height: 1;
     }
-    .string-btn small {
-      display:block;
-      min-height:20px;
-      font-size:8px;
-      line-height:10px;
-      color:var(--muted);
-      text-align:center;
+
+    .string-btn .edge {
+      height: 11px;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 8px;
+      white-space: nowrap;
     }
+
     .string-btn.active {
-      border-color:var(--accent);
-      background:rgba(10,132,255,.16);
-      box-shadow:inset 0 0 0 1px var(--accent);
+      border-color: var(--accent);
+      background: rgba(10, 132, 255, .15);
+      box-shadow: inset 0 0 0 1px var(--accent);
     }
-    .target-text {
-      margin-top:10px;
-      text-align:center;
-      color:var(--muted);
-      font-size:12px;
+
+    .main-card {
+      flex: 1 1 auto;
+      min-height: 0;
+      border: 1px solid #29292e;
+      border-radius: 24px;
+      background: rgba(25, 25, 28, .92);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 12px 18px 14px;
+      overflow: hidden;
     }
-    .beginner-command {
-      margin:16px 0 4px;
-      padding:17px 14px;
-      border-radius:17px;
-      background:#242427;
-      border:1px solid #38383b;
-      text-align:center;
+
+    .target-line {
+      min-height: 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
     }
-    .command-main {
-      font-size:25px;
-      font-weight:850;
-      letter-spacing:-.02em;
-    }
-    .command-sub {
-      margin-top:5px;
-      color:var(--muted);
-      font-size:12px;
-      line-height:1.35;
-    }
-    .hidden { display:none !important; }
 
     .note {
-      text-align:center;
-      font-size:clamp(78px,24vw,120px);
-      line-height:.95;
-      font-weight:800;
-      letter-spacing:-.06em;
-      margin-right:.06em;
-      font-variant-numeric:tabular-nums;
+      text-align: center;
+      font-size: clamp(68px, 18vh, 112px);
+      line-height: .95;
+      font-weight: 850;
+      letter-spacing: -0.06em;
+      font-variant-numeric: tabular-nums;
     }
+
     .frequency {
-      text-align:center;
-      color:var(--muted);
-      font-size:16px;
-      margin-top:8px;
-      font-variant-numeric:tabular-nums;
+      min-height: 20px;
+      margin-top: 4px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
     }
-    .meter { position:relative; height:145px; margin:24px 0 6px; overflow:hidden; }
+
+    .meter {
+      position: relative;
+      height: 112px;
+      margin: 7px 0 0;
+      overflow: hidden;
+      flex: 0 0 auto;
+    }
+
     .arc {
-      position:absolute; left:5%; right:5%; bottom:8px; height:115px;
-      border-top:2px solid var(--line);
-      border-radius:50% 50% 0 0 / 100% 100% 0 0;
+      position: absolute;
+      left: 6%;
+      right: 6%;
+      bottom: 5px;
+      height: 92px;
+      border-top: 2px solid var(--line);
+      border-radius: 50% 50% 0 0 / 100% 100% 0 0;
     }
+
     .center-mark {
-      position:absolute; left:50%; bottom:17px; width:3px; height:90px;
-      background:rgba(255,255,255,.9); border-radius:2px; transform:translateX(-50%);
+      position: absolute;
+      left: 50%;
+      bottom: 13px;
+      width: 3px;
+      height: 73px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, .9);
+      transform: translateX(-50%);
     }
+
     .needle {
-      position:absolute; left:50%; bottom:17px; width:4px; height:94px;
-      border-radius:5px; background:var(--warn);
-      transform-origin:50% 100%;
-      transform:translateX(-50%) rotate(0deg);
-      transition:transform 90ms linear,background-color 120ms ease;
-      box-shadow:0 0 16px rgba(255,159,10,.4);
+      position: absolute;
+      left: 50%;
+      bottom: 13px;
+      width: 4px;
+      height: 77px;
+      border-radius: 5px;
+      background: var(--warn);
+      transform-origin: 50% 100%;
+      transform: translateX(-50%) rotate(0deg);
+      transition: transform 150ms ease-out, background-color 150ms ease;
+      box-shadow: 0 0 14px rgba(255, 159, 10, .38);
     }
-    .dot {
-      position:absolute; left:50%; bottom:11px; width:15px; height:15px;
-      border-radius:50%; transform:translateX(-50%); background:#fff;
-      box-shadow:0 0 0 5px #222;
+
+    .pivot {
+      position: absolute;
+      left: 50%;
+      bottom: 8px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 0 5px #242428;
+      transform: translateX(-50%);
     }
-    .scale { display:flex; justify-content:space-between; color:var(--muted); font-size:12px; margin:-2px 6% 0; }
-    .cents {
-      text-align:center; min-height:28px; margin-top:12px; font-size:22px;
-      font-weight:650; font-variant-numeric:tabular-nums;
+
+    .meter-labels {
+      display: flex;
+      justify-content: space-between;
+      margin: -1px 7% 0;
+      color: #77777d;
+      font-size: 10px;
     }
-    .level-wrap { margin:14px 0 4px; }
-    .level-row {
-      display:flex; justify-content:space-between; align-items:center;
-      color:var(--muted); font-size:12px; margin-bottom:6px;
+
+    .result {
+      min-height: 60px;
+      margin-top: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
     }
-    .level-track {
-      height:8px; border-radius:999px; overflow:hidden;
-      background:#2c2c2e; border:1px solid #38383a;
+
+    .result-main {
+      font-size: clamp(24px, 6.2vw, 34px);
+      line-height: 1.05;
+      font-weight: 900;
+      letter-spacing: -0.03em;
     }
-    .level-bar {
-      height:100%; width:0%;
-      background:#8e8e93;
-      transition:width 80ms linear;
+
+    .result-sub {
+      min-height: 18px;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
     }
-    .status {
-      text-align:center; color:var(--muted); font-size:13px; min-height:38px;
-      margin:10px 0 18px; line-height:1.35;
+
+    .hidden { display: none !important; }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(0, 0, 0, .58);
+      backdrop-filter: blur(10px);
     }
-    button {
-      width:100%; min-height:52px; border:0; border-radius:16px;
-      background:var(--accent); color:white; font-size:17px; font-weight:700;
-      cursor:pointer; -webkit-tap-highlight-color:transparent;
+
+    .settings-card {
+      width: min(100%, 360px);
+      border: 1px solid #34343a;
+      border-radius: 22px;
+      background: #1b1b1e;
+      padding: 20px;
+      box-shadow: 0 20px 70px rgba(0, 0, 0, .5);
     }
-    button:active { transform:scale(.99); }
-    .settings {
-      display:flex; align-items:center; justify-content:center; gap:8px;
-      margin-top:16px; color:var(--muted); font-size:13px;
+
+    .settings-card h2 {
+      margin: 0 0 18px;
+      font-size: 19px;
     }
-    input {
-      width:70px; border:1px solid #3a3a3c; background:#111113; color:var(--text);
-      border-radius:10px; padding:8px 9px; text-align:center; font:inherit;
-      font-variant-numeric:tabular-nums;
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      color: #dddde2;
+      font-size: 14px;
     }
-    .hint { margin-top:16px; color:#77777c; text-align:center; font-size:11px; line-height:1.4; }
-  </style>
+
+    .setting-row input,
+    .setting-row select {
+      width: 110px;
+      border: 1px solid #3a3a40;
+      border-radius: 11px;
+      background: #101012;
+      color: var(--text);
+      padding: 9px 10px;
+      font: inherit;
+    }
+
+    .setting-row input {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .setting-row + .setting-row {
+      margin-top: 12px;
+    }
+
+    .done-button {
+      width: 100%;
+      height: 46px;
+      margin-top: 18px;
+      border: 0;
+      border-radius: 13px;
+      background: var(--accent);
+      color: white;
+      font-weight: 800;
+    }
+
+    .settings-hint {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    @media (max-height: 700px) {
+      .shell { padding-top: max(4px, env(safe-area-inset-top)); padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+      .app { gap: 6px; }
+      .topbar { min-height: 34px; }
+      .brand { font-size: 15px; }
+      .maker { margin-top: 2px; font-size: 8px; }
+      .mode-btn { height: 34px; }
+      .string-btn { height: 51px; }
+      .string-btn .letter { font-size: 20px; }
+      .string-btn .edge { display: none; }
+      .main-card { border-radius: 20px; padding: 8px 14px 10px; }
+      .note { font-size: clamp(58px, 15vh, 86px); }
+      .meter { height: 86px; }
+      .arc { height: 70px; }
+      .center-mark { height: 55px; }
+      .needle { height: 59px; }
+      .result { min-height: 48px; }
+      .result-main { font-size: 24px; }
+    }
+
+    @media (display-mode: standalone) {
+      .shell {
+        padding-top: max(6px, env(safe-area-inset-top));
+        padding-bottom: max(6px, env(safe-area-inset-bottom));
+      }
+    }
+  
+    .start-hint {
+      position: fixed;
+      left: 50%;
+      bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px));
+      z-index: 30;
+      max-width: calc(100vw - 28px);
+      transform: translateX(-50%);
+      padding: 10px 14px;
+      border: 1px solid #3a3a40;
+      border-radius: 999px;
+      background: rgba(28, 28, 31, .96);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: center;
+      pointer-events: none;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .start-hint.error {
+      border-color: rgba(255, 159, 10, .65);
+    }
+</style>
 </head>
 <body>
-<main class="app">
-  <h1>GuitarTuner</h1>
-  <div class="subtitle">Chromatisch · optimiert für Gitarre</div>
 
-  <div class="mode-switch" role="group" aria-label="Modus">
-    <button id="normalMode" class="mode-btn active" type="button">Normal</button>
-    <button id="beginnerMode" class="mode-btn" type="button">Anfänger</button>
+  <div class="shell">
+    <main class="app">
+      <header class="topbar">
+        <div id="micState" class="mic-state">
+          <span class="mic-dot"></span><span>MIC</span>
+        </div>
+
+        <div class="brand-lockup">
+          <div class="brand">GuitarTuner</div>
+          <div class="maker">by dw-creative</div>
+        </div>
+
+        <button id="settingsButton" class="icon-button" type="button">⚙︎</button>
+      </header>
+
+      <div id="modeSwitch" class="mode-switch" role="group">
+        <button id="normalMode" class="mode-btn active" type="button"></button>
+        <button id="beginnerMode" class="mode-btn" type="button"></button>
+      </div>
+
+      <section id="beginnerPanel" class="beginner-panel hidden">
+        <div class="strings">
+          <button class="string-btn active" type="button" data-string="1" data-freq="82.4069" data-note="E2">
+            <span class="num">1</span><span class="letter">E</span><span class="edge"></span>
+          </button>
+          <button class="string-btn" type="button" data-string="2" data-freq="110.0000" data-note="A2">
+            <span class="num">2</span><span class="letter">A</span><span class="edge"></span>
+          </button>
+          <button class="string-btn" type="button" data-string="3" data-freq="146.8324" data-note="D3">
+            <span class="num">3</span><span class="letter">D</span><span class="edge"></span>
+          </button>
+          <button class="string-btn" type="button" data-string="4" data-freq="195.9977" data-note="G3">
+            <span class="num">4</span><span class="letter">G</span><span class="edge"></span>
+          </button>
+          <button class="string-btn" type="button" data-string="5" data-freq="246.9417" data-note="B3">
+            <span class="num">5</span><span class="letter" id="fifthStringLetter">B</span><span class="edge"></span>
+          </button>
+          <button class="string-btn" type="button" data-string="6" data-freq="329.6276" data-note="E4">
+            <span class="num">6</span><span class="letter">E</span><span class="edge"></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="main-card">
+        <div id="targetLine" class="target-line"></div>
+        <div id="note" class="note">&nbsp;</div>
+        <div id="frequency" class="frequency"></div>
+
+        <div id="meter" class="meter">
+          <div class="arc"></div>
+          <div class="center-mark"></div>
+          <div id="needle" class="needle"></div>
+          <div class="pivot"></div>
+        </div>
+
+        <div class="meter-labels">
+          <span id="meterLow"></span>
+          <span id="meterCorrect"></span>
+          <span id="meterHigh"></span>
+        </div>
+
+        <div class="result">
+          <div id="resultMain" class="result-main"></div>
+          <div id="resultSub" class="result-sub"></div>
+        </div>
+      </section>
+    </main>
   </div>
 
-  <div id="beginnerPanel" class="beginner-panel hidden">
-    <div class="beginner-title">Welche Saite stimmst du?</div>
-    <div class="strings" id="strings">
-      <button class="string-btn active" type="button" data-freq="82.4069" data-label="E2">
-        <strong>1</strong><span>E</span><small>dick · tief</small>
-      </button>
-      <button class="string-btn" type="button" data-freq="110.0000" data-label="A2">
-        <strong>2</strong><span>A</span><small></small>
-      </button>
-      <button class="string-btn" type="button" data-freq="146.8324" data-label="D3">
-        <strong>3</strong><span>D</span><small></small>
-      </button>
-      <button class="string-btn" type="button" data-freq="195.9977" data-label="G3">
-        <strong>4</strong><span>G</span><small></small>
-      </button>
-      <button class="string-btn" type="button" data-freq="246.9417" data-label="H3">
-        <strong>5</strong><span>H</span><small></small>
-      </button>
-      <button class="string-btn" type="button" data-freq="329.6276" data-label="E4">
-        <strong>6</strong><span>E</span><small>dünn · hoch</small>
-      </button>
+  <div id="startHint" class="start-hint hidden" role="status" aria-live="polite"></div>
+
+  <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="settings-card">
+      <h2 id="settingsTitle"></h2>
+      <div class="setting-row">
+        <label id="a4Label" for="a4"></label>
+        <div><input id="a4" type="number" min="430" max="450" step="0.1" value="440" inputmode="decimal"> Hz</div>
+      </div>
+
+      <div class="setting-row">
+        <label id="languageLabel" for="languageSelect"></label>
+        <select id="languageSelect">
+          <option value="auto"></option>
+          <option value="de">Deutsch</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+
+      <div id="settingsHint" class="settings-hint"></div>
+      <button id="doneButton" class="done-button" type="button"></button>
     </div>
-    <div id="targetText" class="target-text">Ziel: Saite 1 · tiefes E · 82,4 Hz</div>
   </div>
-
-  <div id="note" class="note">—</div>
-  <div id="frequency" class="frequency">Mikrofon noch nicht aktiv</div>
-
-  <div class="meter">
-    <div class="arc"></div>
-    <div class="center-mark"></div>
-    <div id="needle" class="needle"></div>
-    <div class="dot"></div>
-  </div>
-
-  <div class="scale"><span>−50</span><span>0</span><span>+50 Cent</span></div>
-  <div id="cents" class="cents">—</div>
-
-  <div id="beginnerCommand" class="beginner-command hidden">
-    <div id="commandMain" class="command-main">Saite anschlagen</div>
-    <div id="commandSub" class="command-sub">Das Stimmgerät sagt dir, in welche Richtung du drehen musst.</div>
-  </div>
-
-  <div class="level-wrap">
-    <div class="level-row">
-      <span>Mikrofonpegel</span>
-      <span id="levelText">— dB</span>
-    </div>
-    <div class="level-track"><div id="levelBar" class="level-bar"></div></div>
-  </div>
-
-  <div id="status" class="status">
-    Tippe auf „Mikrofon starten“ und erlaube den Mikrofonzugriff.
-  </div>
-
-  <button id="toggle">Mikrofon starten</button>
-
-  <div class="settings">
-    <label for="a4">Referenz A4</label>
-    <input id="a4" type="number" min="430" max="450" step="0.1" value="440" inputmode="decimal">
-    <span>Hz</span>
-  </div>
-
-  <div class="hint">
-    Tipp: Bei einer unverstärkten E‑Gitarre das iPhone nahe an Saiten bzw. Korpus halten.
-  </div>
-</main>
 
 <script>
+
 (() => {
+  const translations = {
+    de: {
+      normal: "Normal",
+      beginner: "Anfänger",
+      thick: "dick",
+      thin: "dünn",
+      chromaticTuner: "Chromatisches Stimmgerät",
+      micPreparing: "Mikrofon wird vorbereitet …",
+      waitStable: "Warte auf einen stabilen Ton",
+      ready: "Bereit",
+      autoMic: "Mikrofon wird automatisch vorbereitet.",
+      pluckString: "Saite anschlagen",
+      pluckSingle: "Einen einzelnen Ton anschlagen.",
+      pluckSelected: "Saite {n} einzeln anschlagen und kurz klingen lassen.",
+      targetHz: "Ziel {hz} Hz",
+      measuredTarget: "gemessen {measured} Hz · Ziel {target} Hz",
+      fits: "PASST",
+      fitsCheck: "PASST ✓",
+      toneInTune: "Der Ton ist richtig gestimmt.",
+      tooLow: "ZU TIEF",
+      centsBelow: "{cents} Cent unter dem Zielton",
+      tooHigh: "ZU HOCH",
+      centsAbove: "{cents} Cent über dem Zielton",
+      stringInTune: "Saite {n} ist richtig gestimmt.",
+      tighten: "SPANNEN ↑",
+      muchTooLow: "Deutlich zu tief – langsam höher stimmen.",
+      tightenLittle: "Noch etwas spannen.",
+      loosen: "LOCKERN ↓",
+      muchTooHigh: "Deutlich zu hoch – langsam tiefer stimmen.",
+      loosenLittle: "Noch etwas lockern.",
+      settling: "Ton schwingt ein",
+      low: "tief",
+      correct: "richtig",
+      high: "hoch",
+      settings: "Einstellungen",
+      referenceA4: "Referenzton A4",
+      language: "Sprache",
+      languageAuto: "Automatisch",
+      standard440: "440 Hz ist die übliche Standardstimmung.",
+      done: "Fertig",
+      micActive: "Mikrofon aktiv",
+      settingsAria: "Einstellungen",
+      modeAria: "Modus wählen",
+      stringsAria: "Saite wählen",
+      meterAria: "Stimmungsanzeige",
+      targetString: "Saite {n} · {name} · {hz} Hz",
+      lowE: "tiefes E",
+      highE: "hohes E",
+      micHttps: "Mikrofon braucht HTTPS oder localhost",
+      micHttpsFreq: "Mikrofon nur über HTTPS / localhost",
+      micUnsupported: "Dieser Browser unterstützt keinen Mikrofonzugriff",
+      tapStart: "Einmal tippen, um das Mikrofon zu starten",
+      allowRetry: "Mikrofonzugriff im Browser erlauben und erneut tippen",
+      noMic: "Kein Mikrofon gefunden",
+      micFailed: "Mikrofon konnte nicht gestartet werden – erneut tippen",
+      tapResume: "Einmal tippen, um das Mikrofon fortzusetzen"
+    },
+    en: {
+      normal: "Normal",
+      beginner: "Beginner",
+      thick: "thick",
+      thin: "thin",
+      chromaticTuner: "Chromatic tuner",
+      micPreparing: "Preparing microphone …",
+      waitStable: "Waiting for a stable note",
+      ready: "Ready",
+      autoMic: "The microphone is prepared automatically.",
+      pluckString: "Pluck a string",
+      pluckSingle: "Pluck one string.",
+      pluckSelected: "Pluck string {n} by itself and let it ring briefly.",
+      targetHz: "Target {hz} Hz",
+      measuredTarget: "measured {measured} Hz · target {target} Hz",
+      fits: "IN TUNE",
+      fitsCheck: "IN TUNE ✓",
+      toneInTune: "The note is in tune.",
+      tooLow: "TOO LOW",
+      centsBelow: "{cents} cents below the target",
+      tooHigh: "TOO HIGH",
+      centsAbove: "{cents} cents above the target",
+      stringInTune: "String {n} is in tune.",
+      tighten: "TIGHTEN ↑",
+      muchTooLow: "Much too low – tighten slowly to raise the pitch.",
+      tightenLittle: "Tighten a little more.",
+      loosen: "LOOSEN ↓",
+      muchTooHigh: "Much too high – loosen slowly to lower the pitch.",
+      loosenLittle: "Loosen a little more.",
+      settling: "Letting the note settle",
+      low: "low",
+      correct: "in tune",
+      high: "high",
+      settings: "Settings",
+      referenceA4: "A4 reference",
+      language: "Language",
+      languageAuto: "Automatic",
+      standard440: "440 Hz is the standard concert-pitch reference.",
+      done: "Done",
+      micActive: "Microphone active",
+      settingsAria: "Settings",
+      modeAria: "Choose mode",
+      stringsAria: "Choose string",
+      meterAria: "Tuning meter",
+      targetString: "String {n} · {name} · {hz} Hz",
+      lowE: "low E",
+      highE: "high E",
+      micHttps: "Microphone access requires HTTPS or localhost",
+      micHttpsFreq: "Microphone requires HTTPS / localhost",
+      micUnsupported: "This browser does not support microphone access",
+      tapStart: "Tap once to start the microphone",
+      allowRetry: "Allow microphone access in the browser and tap again",
+      noMic: "No microphone found",
+      micFailed: "Could not start the microphone – tap again",
+      tapResume: "Tap once to resume the microphone"
+    }
+  };
+
+  function detectSystemLanguage() {
+    const preferred = (navigator.languages && navigator.languages.length
+      ? navigator.languages[0]
+      : navigator.language || "en").toLowerCase();
+    return preferred.startsWith("de") ? "de" : "en";
+  }
+
+  let languagePreference = localStorage.getItem("guitartuner-language") || "auto";
+  let language = languagePreference === "auto" ? detectSystemLanguage() : languagePreference;
+  let localeTag = language === "de" ? "de-DE" : "en-US";
+
+  function updateDocumentLanguage() {
+    document.documentElement.lang = language;
+    localeTag = language === "de" ? "de-DE" : "en-US";
+  }
+
+  updateDocumentLanguage();
+
+  function t(key, vars = {}) {
+    let value = translations[language][key] ?? translations.en[key] ?? key;
+    for (const [name, replacement] of Object.entries(vars)) {
+      value = value.replaceAll(`{${name}}`, String(replacement));
+    }
+    return value;
+  }
+
+  function fmt1(value) {
+    return new Intl.NumberFormat(localeTag, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1
+    }).format(value);
+  }
+
+  function getNoteNames() {
+    return language === "de"
+      ? ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "H"]
+      : ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+  }
+
   const noteEl = document.getElementById("note");
   const frequencyEl = document.getElementById("frequency");
-  const centsEl = document.getElementById("cents");
-  const statusEl = document.getElementById("status");
-  const toggleBtn = document.getElementById("toggle");
+  const targetLine = document.getElementById("targetLine");
   const needleEl = document.getElementById("needle");
-  const a4Input = document.getElementById("a4");
-  const levelBar = document.getElementById("levelBar");
-  const levelText = document.getElementById("levelText");
+  const resultMain = document.getElementById("resultMain");
+  const resultSub = document.getElementById("resultSub");
+  const micState = document.getElementById("micState");
+  const startHint = document.getElementById("startHint");
   const normalModeBtn = document.getElementById("normalMode");
   const beginnerModeBtn = document.getElementById("beginnerMode");
   const beginnerPanel = document.getElementById("beginnerPanel");
-  const beginnerCommand = document.getElementById("beginnerCommand");
-  const commandMain = document.getElementById("commandMain");
-  const commandSub = document.getElementById("commandSub");
-  const targetText = document.getElementById("targetText");
   const stringButtons = [...document.querySelectorAll(".string-btn")];
-
-  const noteNames = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","H"];
+  const settingsButton = document.getElementById("settingsButton");
+  const settingsModal = document.getElementById("settingsModal");
+  const doneButton = document.getElementById("doneButton");
+  const a4Input = document.getElementById("a4");
+  const languageLabel = document.getElementById("languageLabel");
+  const languageSelect = document.getElementById("languageSelect");
 
   let audioContext = null;
-  let analyser = null;
   let stream = null;
   let source = null;
-  let hp = null;
-  let lp = null;
+  let highpass = null;
+  let lowpass = null;
+  let inputGain = null;
+  let analyser = null;
   let buffer = null;
-  let running = false;
   let animationId = null;
+  let running = false;
+  let starting = false;
   let lastAnalysis = 0;
-  let lastGoodAt = 0;
-  let smoothedPitch = null;
-  let mode = "normal";
-  let targetFreq = 82.4069;
-  let targetLabel = "E2";
-  let targetString = 1;
 
-  function getA4() {
-    const v = parseFloat(a4Input.value);
-    return Number.isFinite(v) && v >= 400 && v <= 480 ? v : 440;
+  let mode = localStorage.getItem("guitartuner-mode") || "normal";
+  let targetString = Number(localStorage.getItem("guitartuner-string")) || 1;
+  let targetFreq = 82.4069;
+  let targetNote = "E2";
+
+  const savedA4 = Number(localStorage.getItem("guitartuner-a4"));
+  if (savedA4 >= 430 && savedA4 <= 450) a4Input.value = savedA4;
+
+  let lastPitchCandidateAt = 0;
+  let attackUntil = 0;
+  let pitchHistory = [];
+  let stablePitch = null;
+  let lastStableAt = 0;
+
+  function localizedTargetLetter() {
+    if (targetString === 5) return language === "de" ? "H" : "B";
+    return targetNote.replace(/[0-9]/g, "");
   }
 
-  function frequencyToMidi(freq, a4) {
-    return 69 + 12 * Math.log2(freq / a4);
+  function localizedStringName(n) {
+    if (n === 1) return t("lowE");
+    if (n === 6) return t("highE");
+    if (n === 5) return language === "de" ? "H" : "B";
+    const btn = stringButtons.find(b => Number(b.dataset.string) === n);
+    return btn ? btn.dataset.note.replace(/[0-9]/g, "") : "";
+  }
+
+  function updateTargetLine() {
+    if (mode === "beginner") {
+      targetLine.textContent = t("targetString", {
+        n: targetString,
+        name: localizedStringName(targetString),
+        hz: fmt1(targetFreq)
+      });
+    } else {
+      targetLine.textContent = t("chromaticTuner");
+    }
+  }
+
+  function applyStaticTranslations() {
+    normalModeBtn.textContent = t("normal");
+    beginnerModeBtn.textContent = t("beginner");
+
+    document.getElementById("meterLow").textContent = t("low");
+    document.getElementById("meterCorrect").textContent = t("correct");
+    document.getElementById("meterHigh").textContent = t("high");
+
+    document.getElementById("settingsTitle").textContent = t("settings");
+    document.getElementById("a4Label").textContent = t("referenceA4");
+    languageLabel.textContent = t("language");
+    document.getElementById("settingsHint").textContent = t("standard440");
+    doneButton.textContent = t("done");
+
+    languageSelect.options[0].textContent = t("languageAuto");
+    languageSelect.options[1].textContent = "Deutsch";
+    languageSelect.options[2].textContent = "English";
+    languageSelect.value = languagePreference;
+
+    settingsButton.setAttribute("aria-label", t("settingsAria"));
+    micState.setAttribute("aria-label", t("micActive"));
+    document.getElementById("modeSwitch").setAttribute("aria-label", t("modeAria"));
+    beginnerPanel.setAttribute("aria-label", t("stringsAria"));
+    document.getElementById("meter").setAttribute("aria-label", t("meterAria"));
+
+    const edge1 = stringButtons[0].querySelector(".edge");
+    const edge6 = stringButtons[5].querySelector(".edge");
+    edge1.textContent = t("thick");
+    edge6.textContent = t("thin");
+    document.getElementById("fifthStringLetter").textContent = language === "de" ? "H" : "B";
+  }
+
+  function applyLanguagePreference(preference) {
+    languagePreference = preference;
+    localStorage.setItem("guitartuner-language", languagePreference);
+
+    language = languagePreference === "auto" ? detectSystemLanguage() : languagePreference;
+    updateDocumentLanguage();
+
+    applyStaticTranslations();
+    updateTargetLine();
+    resetReading();
+  }
+
+  function getA4() {
+    const value = Number(a4Input.value);
+    return Number.isFinite(value) && value >= 430 && value <= 450 ? value : 440;
+  }
+
+  function midiFromFrequency(freq) {
+    return 69 + 12 * Math.log2(freq / getA4());
+  }
+
+  function median(values) {
+    if (!values.length) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  function centsBetween(a, b) {
+    return 1200 * Math.log2(a / b);
+  }
+
+  function setNeedle(cents, good = false) {
+    const limited = Math.max(-50, Math.min(50, cents));
+    needleEl.style.transform = `translateX(-50%) rotate(${limited * 0.9}deg)`;
+    needleEl.style.background = good ? "var(--ok)" : "var(--warn)";
+    needleEl.style.boxShadow = good
+      ? "0 0 15px rgba(48,209,88,.55)"
+      : "0 0 14px rgba(255,159,10,.38)";
+  }
+
+  function resetReading() {
+    pitchHistory = [];
+    stablePitch = null;
+    setNeedle(0, false);
+
+    if (mode === "beginner") {
+      noteEl.textContent = localizedTargetLetter();
+      frequencyEl.textContent = t("targetHz", { hz: fmt1(targetFreq) });
+      resultMain.textContent = t("pluckString");
+      resultSub.textContent = t("pluckSelected", { n: targetString });
+    } else {
+      noteEl.innerHTML = "&nbsp;";
+      frequencyEl.textContent = running ? t("waitStable") : t("micPreparing");
+      resultMain.textContent = running ? t("pluckString") : t("ready");
+      resultSub.textContent = running ? t("pluckSingle") : t("autoMic");
+    }
+  }
+
+  function updateNormal(freq) {
+    const midi = midiFromFrequency(freq);
+    const nearest = Math.round(midi);
+    const cents = (midi - nearest) * 100;
+    const noteIndex = ((nearest % 12) + 12) % 12;
+    const octave = Math.floor(nearest / 12) - 1;
+    const inTune = Math.abs(cents) <= 4;
+
+    noteEl.textContent = getNoteNames()[noteIndex] + octave;
+    frequencyEl.textContent = `${fmt1(freq)} Hz`;
+    setNeedle(cents, inTune);
+
+    if (inTune) {
+      resultMain.textContent = t("fits");
+      resultSub.textContent = t("toneInTune");
+    } else if (cents < 0) {
+      resultMain.textContent = t("tooLow");
+      resultSub.textContent = t("centsBelow", { cents: Math.round(Math.abs(cents)) });
+    } else {
+      resultMain.textContent = t("tooHigh");
+      resultSub.textContent = t("centsAbove", { cents: Math.round(Math.abs(cents)) });
+    }
+  }
+
+  function foldToTargetOctave(freq) {
+    let adjusted = freq;
+    while (adjusted > targetFreq * 1.75) adjusted /= 2;
+    while (adjusted < targetFreq / 1.75) adjusted *= 2;
+    return adjusted;
+  }
+
+  function updateBeginner(freq) {
+    const adjusted = foldToTargetOctave(freq);
+    const cents = centsBetween(adjusted, targetFreq);
+    const absCents = Math.abs(cents);
+    const inTune = absCents <= 5;
+
+    noteEl.textContent = localizedTargetLetter();
+    frequencyEl.textContent = t("measuredTarget", {
+      measured: fmt1(adjusted),
+      target: fmt1(targetFreq)
+    });
+    setNeedle(cents, inTune);
+
+    if (inTune) {
+      resultMain.textContent = t("fitsCheck");
+      resultSub.textContent = t("stringInTune", { n: targetString });
+      return;
+    }
+
+    if (cents < 0) {
+      resultMain.textContent = t("tighten");
+      resultSub.textContent = absCents > 100 ? t("muchTooLow") : t("tightenLittle");
+    } else {
+      resultMain.textContent = t("loosen");
+      resultSub.textContent = absCents > 100 ? t("muchTooHigh") : t("loosenLittle");
+    }
   }
 
   function updateDisplay(freq) {
-    if (mode === "beginner") {
-      updateBeginnerDisplay(freq);
-      return;
-    }
-
-    const midi = frequencyToMidi(freq, getA4());
-    const nearest = Math.round(midi);
-    const cents = Math.round((midi - nearest) * 100);
-    const noteIndex = ((nearest % 12) + 12) % 12;
-    const octave = Math.floor(nearest / 12) - 1;
-
-    noteEl.textContent = noteNames[noteIndex] + octave;
-    frequencyEl.textContent = freq.toFixed(1) + " Hz";
-    centsEl.textContent = (cents > 0 ? "+" : "") + cents + " Cent";
-
-    const limited = Math.max(-50, Math.min(50, cents));
-    const angle = limited * 0.9;
-    needleEl.style.transform = `translateX(-50%) rotate(${angle}deg)`;
-
-    const inTune = Math.abs(cents) <= 4;
-    needleEl.style.background = inTune ? "var(--ok)" : "var(--warn)";
-    needleEl.style.boxShadow = inTune
-      ? "0 0 16px rgba(52,199,89,.55)"
-      : "0 0 16px rgba(255,159,10,.4)";
-
-    statusEl.textContent = inTune
-      ? "Passt."
-      : (cents < 0 ? "Zu tief – etwas höher stimmen." : "Zu hoch – etwas tiefer stimmen.");
-  }
-
-  function updateBeginnerDisplay(freq) {
-    // Compare directly with the selected open-string target. This still gives
-    // the correct direction even when the detected note is several semitones away.
-    const centsFromTarget = 1200 * Math.log2(freq / targetFreq);
-    const absCents = Math.abs(centsFromTarget);
-    const inTune = absCents <= 5;
-
-    noteEl.textContent = targetLabel.replace(/[0-9]/g, "");
-    frequencyEl.textContent = `gemessen ${freq.toFixed(1)} Hz · Ziel ${targetFreq.toFixed(1)} Hz`;
-
-    // Needle shows the final ±50 cent range. If farther away it stays pinned
-    // to one side while the large command remains unambiguous.
-    const limited = Math.max(-50, Math.min(50, centsFromTarget));
-    needleEl.style.transform = `translateX(-50%) rotate(${limited * 0.9}deg)`;
-
-    if (inTune) {
-      centsEl.textContent = "✓ richtig gestimmt";
-      commandMain.textContent = "PASST";
-      commandSub.textContent = `Saite ${targetString} ist richtig gestimmt.`;
-      needleEl.style.background = "var(--ok)";
-      needleEl.style.boxShadow = "0 0 16px rgba(52,199,89,.55)";
-      statusEl.textContent = "Fertig – die Saite stimmt.";
-      return;
-    }
-
-    needleEl.style.background = "var(--warn)";
-    needleEl.style.boxShadow = "0 0 16px rgba(255,159,10,.4)";
-
-    if (centsFromTarget < 0) {
-      commandMain.textContent = "SPANNEN ↑";
-      commandSub.textContent = absCents > 100
-        ? "Die Saite ist deutlich zu tief. Langsam spannen, bis du näher am Zielton bist."
-        : "Die Saite ist zu tief. Etwas spannen.";
-      statusEl.textContent = "Ton ist zu tief – Saite spannen.";
-    } else {
-      commandMain.textContent = "LOCKERN ↓";
-      commandSub.textContent = absCents > 100
-        ? "Die Saite ist deutlich zu hoch. Langsam lockern, bis du näher am Zielton bist."
-        : "Die Saite ist zu hoch. Etwas lockern.";
-      statusEl.textContent = "Ton ist zu hoch – Saite lockern.";
-    }
-
-    if (absCents >= 100) {
-      const semitones = absCents / 100;
-      centsEl.textContent = semitones >= 2
-        ? `${semitones.toFixed(1)} Halbtöne vom Ziel entfernt`
-        : `${Math.round(absCents)} Cent vom Ziel entfernt`;
-    } else {
-      centsEl.textContent = `${Math.round(absCents)} Cent vom Ziel entfernt`;
-    }
-  }
-
-  function clearPitchDisplay(message) {
-    noteEl.textContent = mode === "beginner" ? targetLabel.replace(/[0-9]/g, "") : "—";
-    frequencyEl.textContent = "Kein stabiler Ton erkannt";
-    centsEl.textContent = "—";
-    if (mode === "beginner") {
-      commandMain.textContent = "SAITE ANSCHLAGEN";
-      commandSub.textContent = `Saite ${targetString} einzeln anschlagen und kurz ausklingen lassen.`;
-    }
-    needleEl.style.transform = "translateX(-50%) rotate(0deg)";
-    smoothedPitch = null;
-    if (message) statusEl.textContent = message;
+    if (mode === "beginner") updateBeginner(freq);
+    else updateNormal(freq);
   }
 
   function rmsOf(data) {
-    let sum = 0;
     let mean = 0;
     for (let i = 0; i < data.length; i++) mean += data[i];
     mean /= data.length;
 
+    let sum = 0;
     for (let i = 0; i < data.length; i++) {
       const x = data[i] - mean;
       sum += x * x;
@@ -464,39 +951,16 @@
     return Math.sqrt(sum / data.length);
   }
 
-  function updateLevel(rms) {
-    const db = 20 * Math.log10(Math.max(rms, 1e-7));
-    levelText.textContent = db.toFixed(0) + " dB";
-    const pct = Math.max(0, Math.min(100, ((db + 70) / 55) * 100));
-    levelBar.style.width = pct + "%";
-  }
-
-  /*
-    YIN pitch detection.
-    Changes vs. the first version:
-    - much lower silence threshold
-    - larger analysis buffer
-    - uses a much longer comparison window, important for low guitar notes
-    - more tolerant confidence threshold
-  */
   function detectPitchYIN(data, sampleRate) {
-    const minFreq = 65;    // comfortably below low E (82.4 Hz)
-    const maxFreq = 1200;  // enough for guitar + harmonics/voice
-    const threshold = 0.20;
-
+    const minFreq = 62;
+    const maxFreq = 1250;
+    const yinThreshold = 0.23;
     const minTau = Math.max(2, Math.floor(sampleRate / maxFreq));
-    const maxTau = Math.min(
-      Math.floor(sampleRate / minFreq),
-      Math.floor(data.length / 2) - 1
-    );
+    const maxTau = Math.min(Math.floor(sampleRate / minFreq), Math.floor(data.length / 2) - 1);
 
     const rms = rmsOf(data);
-    updateLevel(rms);
+    if (rms < 0.00032) return { freq: null, rms };
 
-    // About -60 dBFS. The old version used ~-38 dBFS and was too insensitive.
-    if (rms < 0.0010) return null;
-
-    // Remove DC offset.
     let mean = 0;
     for (let i = 0; i < data.length; i++) mean += data[i];
     mean /= data.length;
@@ -507,252 +971,358 @@
     for (let tau = 1; tau <= maxTau; tau++) {
       let sum = 0;
       for (let i = 0; i < usable; i++) {
-        const a = data[i] - mean;
-        const b = data[i + tau] - mean;
-        const d = a - b;
+        const d = (data[i] - mean) - (data[i + tau] - mean);
         sum += d * d;
       }
       yin[tau] = sum;
     }
 
     yin[0] = 1;
-    let running = 0;
+    let runningSum = 0;
     for (let tau = 1; tau <= maxTau; tau++) {
-      running += yin[tau];
-      yin[tau] = running > 0 ? yin[tau] * tau / running : 1;
+      runningSum += yin[tau];
+      yin[tau] = runningSum > 0 ? yin[tau] * tau / runningSum : 1;
     }
 
     let tauEstimate = -1;
-
     for (let tau = minTau; tau <= maxTau; tau++) {
-      if (yin[tau] < threshold) {
+      if (yin[tau] < yinThreshold) {
         while (tau + 1 <= maxTau && yin[tau + 1] < yin[tau]) tau++;
         tauEstimate = tau;
         break;
       }
     }
 
-    // If nothing crossed the threshold, use the best minimum if still plausible.
     if (tauEstimate < 0) {
       let bestTau = minTau;
       for (let tau = minTau + 1; tau <= maxTau; tau++) {
         if (yin[tau] < yin[bestTau]) bestTau = tau;
       }
-      if (yin[bestTau] > 0.42) return null;
+      if (yin[bestTau] > 0.50) return { freq: null, rms };
       tauEstimate = bestTau;
     }
 
-    // Parabolic interpolation.
-    const t0 = Math.max(minTau, tauEstimate - 1);
-    const t2 = Math.min(maxTau, tauEstimate + 1);
+    const left = Math.max(minTau, tauEstimate - 1);
+    const right = Math.min(maxTau, tauEstimate + 1);
     let betterTau = tauEstimate;
 
-    if (t0 !== tauEstimate && t2 !== tauEstimate) {
-      const s0 = yin[t0];
+    if (left !== tauEstimate && right !== tauEstimate) {
+      const s0 = yin[left];
       const s1 = yin[tauEstimate];
-      const s2 = yin[t2];
+      const s2 = yin[right];
       const denom = 2 * (2 * s1 - s2 - s0);
-      if (Math.abs(denom) > 1e-12) {
-        betterTau = tauEstimate + (s2 - s0) / denom;
-      }
+      if (Math.abs(denom) > 1e-12) betterTau = tauEstimate + (s2 - s0) / denom;
     }
 
     const freq = sampleRate / betterTau;
-    if (!Number.isFinite(freq) || freq < minFreq || freq > maxFreq) return null;
-    return freq;
+    if (!Number.isFinite(freq) || freq < minFreq || freq > maxFreq) return { freq: null, rms };
+    return { freq, rms };
+  }
+
+  function processDetection(detected, rms, now) {
+    if (!detected) {
+      if (lastPitchCandidateAt && now - lastPitchCandidateAt > 650) {
+        resetReading();
+        lastPitchCandidateAt = 0;
+      }
+      return;
+    }
+
+    if (!lastPitchCandidateAt || now - lastPitchCandidateAt > 420) {
+      attackUntil = now + 190;
+      pitchHistory = [];
+      stablePitch = null;
+    }
+    lastPitchCandidateAt = now;
+
+    if (now < attackUntil) {
+      resultMain.textContent = "…";
+      resultSub.textContent = t("settling");
+      return;
+    }
+
+    pitchHistory.push(Math.log2(detected));
+    if (pitchHistory.length > 7) pitchHistory.shift();
+    if (pitchHistory.length < 3) return;
+
+    const medLog = median(pitchHistory);
+    const deviations = pitchHistory.map(v => Math.abs((v - medLog) * 1200));
+    const medianDeviation = median(deviations);
+    if (medianDeviation > 22) return;
+
+    const candidate = Math.pow(2, medLog);
+
+    if (stablePitch == null) {
+      stablePitch = candidate;
+    } else {
+      const jump = Math.abs(centsBetween(candidate, stablePitch));
+      if (jump > 90 && now - lastStableAt < 350) return;
+
+      const oldLog = Math.log2(stablePitch);
+      const newLog = Math.log2(candidate);
+      stablePitch = Math.pow(2, oldLog * 0.72 + newLog * 0.28);
+    }
+
+    lastStableAt = now;
+    updateDisplay(stablePitch);
   }
 
   function tick(now) {
     if (!running || !analyser) return;
 
-    // 12.5 analyses/s is plenty for a tuner and much lighter on an iPhone.
-    if (now - lastAnalysis >= 80) {
+    if (now - lastAnalysis >= 75) {
       lastAnalysis = now;
       analyser.getFloatTimeDomainData(buffer);
-
-      const detected = detectPitchYIN(buffer, audioContext.sampleRate);
-
-      if (detected) {
-        smoothedPitch = smoothedPitch == null
-          ? detected
-          : smoothedPitch * 0.68 + detected * 0.32;
-
-        lastGoodAt = performance.now();
-        updateDisplay(smoothedPitch);
-      } else if (performance.now() - lastGoodAt > 600) {
-        const rms = rmsOf(buffer);
-        if (rms < 0.0010) {
-          clearPitchDisplay("Signal sehr leise – iPhone näher an das Instrument halten.");
-        } else {
-          clearPitchDisplay("Pegel ist vorhanden, aber der Ton ist noch nicht stabil genug.");
-        }
-      }
+      const { freq, rms } = detectPitchYIN(buffer, audioContext.sampleRate);
+      processDetection(freq, rms, performance.now());
     }
 
     animationId = requestAnimationFrame(tick);
   }
 
-  async function start() {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      statusEl.textContent = "Dieser Browser unterstützt keinen Mikrofonzugriff.";
-      return;
-    }
+  function showStartHint(message, isError = false) {
+    startHint.textContent = message;
+    startHint.classList.remove("hidden");
+    startHint.classList.toggle("error", isError);
+  }
 
-    try {
-      statusEl.textContent = "Mikrofon wird gestartet …";
+  function hideStartHint() {
+    startHint.classList.add("hidden");
+    startHint.classList.remove("error");
+  }
 
-      audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)({
+  async function createAudioGraph() {
+    if (!stream) return false;
+
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({
         latencyHint: "interactive"
       });
-      await audioContext.resume();
+    }
 
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: true,
-          channelCount: 1
-        }
-      });
-
+    if (!analyser) {
       source = audioContext.createMediaStreamSource(stream);
 
-      // Remove rumble and very high-frequency noise, while keeping the full guitar range.
-      hp = audioContext.createBiquadFilter();
-      hp.type = "highpass";
-      hp.frequency.value = 45;
-      hp.Q.value = 0.7;
+      highpass = audioContext.createBiquadFilter();
+      highpass.type = "highpass";
+      highpass.frequency.value = 45;
+      highpass.Q.value = 0.7;
 
-      lp = audioContext.createBiquadFilter();
-      lp.type = "lowpass";
-      lp.frequency.value = 1400;
-      lp.Q.value = 0.7;
+      lowpass = audioContext.createBiquadFilter();
+      lowpass.type = "lowpass";
+      lowpass.frequency.value = 1500;
+      lowpass.Q.value = 0.7;
+
+      inputGain = audioContext.createGain();
+      inputGain.gain.value = 3.5;
 
       analyser = audioContext.createAnalyser();
       analyser.fftSize = 8192;
       analyser.smoothingTimeConstant = 0;
 
-      source.connect(hp);
-      hp.connect(lp);
-      lp.connect(analyser);
+      source.connect(highpass);
+      highpass.connect(lowpass);
+      lowpass.connect(inputGain);
+      inputGain.connect(analyser);
 
       buffer = new Float32Array(analyser.fftSize);
-      running = true;
-      toggleBtn.textContent = "Mikrofon stoppen";
-      statusEl.textContent = mode === "beginner"
-        ? `Saite ${targetString} einzeln anschlagen.`
-        : "Spiele einen einzelnen Ton und lass ihn kurz ausschwingen.";
-      lastGoodAt = performance.now();
-      lastAnalysis = 0;
-      animationId = requestAnimationFrame(tick);
+    }
 
-    } catch (err) {
-      console.error(err);
-      statusEl.textContent =
-        "Mikrofon konnte nicht gestartet werden. Prüfe die Mikrofonfreigabe für diese Website.";
-      toggleBtn.textContent = "Mikrofon starten";
-      running = false;
+    try {
+      if (audioContext.state !== "running") await audioContext.resume();
+    } catch (_) {}
+
+    return audioContext.state === "running";
+  }
+
+  function finishMicrophoneStart() {
+    starting = false;
+
+    if (!running) {
+      running = true;
+      lastPitchCandidateAt = 0;
+      pitchHistory = [];
+      stablePitch = null;
+
+      micState.classList.add("active");
+      resetReading();
+
+      if (animationId) cancelAnimationFrame(animationId);
+      animationId = requestAnimationFrame(tick);
+    }
+
+    hideStartHint();
+  }
+
+  async function requestMicrophone(autoAttempt = false) {
+    if (running || starting) return;
+
+    if (!window.isSecureContext) {
+      showStartHint(t("micHttps"), true);
+      frequencyEl.textContent = t("micHttpsFreq");
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      showStartHint(t("micUnsupported"), true);
+      return;
+    }
+
+    starting = true;
+
+    try {
+      if (!stream) {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: true,
+            channelCount: 1
+          }
+        });
+      }
+
+      const ready = await createAudioGraph();
+
+      if (ready) {
+        finishMicrophoneStart();
+      } else {
+        starting = false;
+        showStartHint(t("tapStart"));
+      }
+    } catch (error) {
+      console.error(error);
+      starting = false;
+
+      if (autoAttempt) {
+        showStartHint(t("tapStart"));
+      } else if (error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError") {
+        showStartHint(t("allowRetry"), true);
+      } else if (error?.name === "NotFoundError" || error?.name === "DevicesNotFoundError") {
+        showStartHint(t("noMic"), true);
+      } else {
+        showStartHint(t("micFailed"), true);
+      }
     }
   }
 
-  function stop() {
-    running = false;
-    if (animationId) cancelAnimationFrame(animationId);
-    animationId = null;
+  async function startFromGesture() {
+    if (running || starting) return;
 
-    if (source) { try { source.disconnect(); } catch (_) {} }
-    if (hp) { try { hp.disconnect(); } catch (_) {} }
-    if (lp) { try { lp.disconnect(); } catch (_) {} }
+    try {
+      if (audioContext && audioContext.state !== "running") {
+        await audioContext.resume();
+      }
+    } catch (_) {}
 
-    if (stream) stream.getTracks().forEach(track => track.stop());
+    if (stream) {
+      starting = true;
+      const ready = await createAudioGraph();
+      starting = false;
 
-    source = null;
-    hp = null;
-    lp = null;
-    stream = null;
-    analyser = null;
-    buffer = null;
+      if (ready) {
+        finishMicrophoneStart();
+        return;
+      }
+    }
 
-    levelBar.style.width = "0%";
-    levelText.textContent = "— dB";
-    clearPitchDisplay("Mikrofon gestoppt.");
-    frequencyEl.textContent = "Mikrofon nicht aktiv";
-    toggleBtn.textContent = "Mikrofon starten";
+    await requestMicrophone(false);
   }
 
+  function chooseString(button) {
+    stringButtons.forEach(btn => btn.classList.remove("active"));
+    button.classList.add("active");
+
+    targetString = Number(button.dataset.string);
+    targetFreq = Number(button.dataset.freq);
+    targetNote = button.dataset.note;
+    localStorage.setItem("guitartuner-string", String(targetString));
+
+    updateTargetLine();
+    resetReading();
+  }
 
   function setMode(nextMode) {
     mode = nextMode;
-    const beginner = mode === "beginner";
+    localStorage.setItem("guitartuner-mode", mode);
 
+    const beginner = mode === "beginner";
     normalModeBtn.classList.toggle("active", !beginner);
     beginnerModeBtn.classList.toggle("active", beginner);
     beginnerPanel.classList.toggle("hidden", !beginner);
-    beginnerCommand.classList.toggle("hidden", !beginner);
 
-    smoothedPitch = null;
-    needleEl.style.transform = "translateX(-50%) rotate(0deg)";
+    pitchHistory = [];
+    stablePitch = null;
 
     if (beginner) {
-      noteEl.textContent = targetLabel.replace(/[0-9]/g, "");
-      frequencyEl.textContent = `Ziel ${targetFreq.toFixed(1)} Hz`;
-      centsEl.textContent = "—";
-      commandMain.textContent = "SAITE ANSCHLAGEN";
-      commandSub.textContent = `Saite ${targetString} einzeln anschlagen und kurz ausklingen lassen.`;
-      statusEl.textContent = running
-        ? "Das Stimmgerät zeigt dir nur noch SPANNEN, LOCKERN oder PASST."
-        : "Mikrofon starten und dann die ausgewählte Saite einzeln anschlagen.";
+      const selected = stringButtons.find(btn => Number(btn.dataset.string) === targetString) || stringButtons[0];
+      chooseString(selected);
     } else {
-      noteEl.textContent = "—";
-      frequencyEl.textContent = running ? "Spiele einen einzelnen Ton." : "Mikrofon nicht aktiv";
-      centsEl.textContent = "—";
-      statusEl.textContent = running
-        ? "Spiele einen einzelnen Ton und lass ihn kurz ausschwingen."
-        : "Tippe auf „Mikrofon starten“ und erlaube den Mikrofonzugriff.";
+      updateTargetLine();
+      resetReading();
     }
   }
 
+  function openSettings() {
+    settingsModal.classList.remove("hidden");
+  }
+
+  function closeSettings() {
+    const value = getA4();
+    a4Input.value = value;
+    localStorage.setItem("guitartuner-a4", String(value));
+
+    const selectedLanguage = languageSelect.value;
+    if (selectedLanguage !== languagePreference) {
+      applyLanguagePreference(selectedLanguage);
+    }
+
+    settingsModal.classList.add("hidden");
+    pitchHistory = [];
+    stablePitch = null;
+  }
+
+  const gestureStart = () => {
+    if (!running && !starting) startFromGesture();
+  };
+
+  document.addEventListener("pointerdown", gestureStart, { passive: true });
+  document.addEventListener("touchend", gestureStart, { passive: true });
+  document.addEventListener("keydown", gestureStart);
+
   normalModeBtn.addEventListener("click", () => setMode("normal"));
   beginnerModeBtn.addEventListener("click", () => setMode("beginner"));
-
-  stringButtons.forEach((btn, index) => {
-    btn.addEventListener("click", () => {
-      stringButtons.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-
-      targetFreq = parseFloat(btn.dataset.freq);
-      targetLabel = btn.dataset.label;
-      targetString = index + 1;
-
-      const names = {
-        1: "tiefes E · dickste Saite",
-        2: "A",
-        3: "D",
-        4: "G",
-        5: "H",
-        6: "hohes E · dünnste Saite"
-      };
-      targetText.textContent =
-        `Ziel: Saite ${targetString} · ${names[targetString]} · ${targetFreq.toFixed(1)} Hz`;
-
-      smoothedPitch = null;
-      noteEl.textContent = targetLabel.replace(/[0-9]/g, "");
-      frequencyEl.textContent = `Ziel ${targetFreq.toFixed(1)} Hz`;
-      centsEl.textContent = "—";
-      commandMain.textContent = "SAITE ANSCHLAGEN";
-      commandSub.textContent = `Saite ${targetString} einzeln anschlagen und kurz ausklingen lassen.`;
-      needleEl.style.transform = "translateX(-50%) rotate(0deg)";
-    });
+  stringButtons.forEach(btn => btn.addEventListener("click", () => chooseString(btn)));
+  settingsButton.addEventListener("click", openSettings);
+  languageSelect.addEventListener("change", () => {
+    applyLanguagePreference(languageSelect.value);
   });
 
-  toggleBtn.addEventListener("click", () => running ? stop() : start());
+  doneButton.addEventListener("click", closeSettings);
+
+  settingsModal.addEventListener("click", event => {
+    if (event.target === settingsModal) closeSettings();
+  });
 
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && running && audioContext?.state === "suspended") {
-      audioContext.resume().catch(() => {});
+      audioContext.resume().then(() => {
+        if (audioContext.state !== "running") showStartHint(t("tapResume"));
+      }).catch(() => showStartHint(t("tapResume")));
     }
   });
+
+  applyStaticTranslations();
+
+  const initialString = stringButtons.find(btn => Number(btn.dataset.string) === targetString) || stringButtons[0];
+  targetFreq = Number(initialString.dataset.freq);
+  targetNote = initialString.dataset.note;
+
+  setMode(mode === "beginner" ? "beginner" : "normal");
+
+  requestMicrophone(true);
 })();
+
 </script>
 </body>
 </html>
