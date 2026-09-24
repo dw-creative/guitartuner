@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0d0d0f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="GuitarTuner">
+  <meta name="application-version" content="11.0.0">
   <title>GuitarTuner</title>
   <style>
     :root {
@@ -458,9 +459,49 @@
     .start-hint.error {
       border-color: rgba(255, 159, 10, .65);
     }
+
+    /* V11: no raw guesses on the main display. */
+    .main-card.unlocked .needle { visibility: hidden; }
+    .main-card.held .needle, .main-card.held .note { opacity: .4; }
+    .note { min-height: .95em; }
+    .topbar { flex: 0 0 auto; }
+    .result-sub { max-width: 100%; text-wrap: balance; }
+    .settings-card { max-height: calc(100dvh - 36px); overflow-y: auto; overscroll-behavior: contain; }
+    .setting-row input, .setting-row select { font-size: 16px; }
+    .setting-row select { width: 150px; }
+    .version-label { margin-top: 14px; color: var(--muted); font-size: 11px; text-align: center; }
+    .diag-badge { margin-top: 4px; color: var(--warn); font-size: 10px; }
+    .diagnostics-panel { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+    .diagnostics-panel summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+    .diagnostics-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 14px; }
+    .diagnostics-toggle input { width: 22px; height: 22px; accent-color: var(--accent); }
+    .diagnostic-buttons { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .diagnostic-buttons button { min-height: 40px; padding: 8px 10px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; font-size: 12px; cursor: pointer; }
+    .diagnostic-buttons button:disabled { opacity: .4; cursor: default; }
+    button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .start-hint { z-index: 10; }
+    @media (max-width: 350px) { .setting-row { gap: 5px; } .setting-row select { width: 135px; } }
+    @media (max-height: 470px) {
+      .app { gap: 4px; }
+      .main-card { padding: 4px 10px; }
+      .note { font-size: 40px; }
+      .frequency, .target-line { font-size: 11px; min-height: 14px; }
+      .meter { height: 50px; margin-top: 3px; }
+      .arc { height: 43px; }
+      .center-mark { height: 35px; }
+      .needle { height: 37px; }
+      .result { min-height: 36px; margin-top: 3px; }
+      .result-main { font-size: 18px; }
+      .result-sub { font-size: 10px; margin-top: 3px; min-height: 12px; }
+      .string-btn { height: 41px; }
+      .string-btn .letter { font-size: 17px; }
+    }
+    @media (prefers-reduced-motion: reduce) { .needle { transition: none; } }
+
 </style>
 </head>
 <body>
+  <noscript>This tuner needs JavaScript. / Dieses Stimmgerät benötigt JavaScript.</noscript>
 
   <div class="shell">
     <main class="app">
@@ -472,6 +513,7 @@
         <div class="brand-lockup">
           <div class="brand">GuitarTuner</div>
           <div class="maker">by dw-creative</div>
+          <div id="diagBadge" class="diag-badge hidden"></div>
         </div>
 
         <button id="settingsButton" class="icon-button" type="button">⚙︎</button>
@@ -505,7 +547,7 @@
         </div>
       </section>
 
-      <section class="main-card">
+      <section class="main-card unlocked">
         <div id="targetLine" class="target-line"></div>
         <div id="note" class="note">&nbsp;</div>
         <div id="frequency" class="frequency"></div>
@@ -535,7 +577,7 @@
 
   <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
     <div class="settings-card">
-      <h2 id="settingsTitle"></h2>
+      <h2 id="settingsTitle" tabindex="-1"></h2>
       <div class="setting-row">
         <label id="a4Label" for="a4"></label>
         <div><input id="a4" type="number" min="430" max="450" step="0.1" value="440" inputmode="decimal"> Hz</div>
@@ -551,13 +593,299 @@
       </div>
 
       <div id="settingsHint" class="settings-hint"></div>
+      <details class="diagnostics-panel">
+        <summary id="diagSummary"></summary>
+        <label class="diagnostics-toggle"><span id="diagLabel"></span><input id="diagToggle" type="checkbox"></label>
+        <p id="diagHelp" class="settings-hint"></p>
+        <div id="diagCount" class="settings-hint"></div>
+        <div class="diagnostic-buttons">
+          <button id="diagMark" type="button" disabled></button>
+          <button id="diagExport" type="button" disabled></button>
+          <button id="diagClear" type="button" disabled></button>
+        </div>
+      </details>
+      <div class="version-label">GuitarTuner 11.0.0</div>
       <button id="doneButton" class="done-button" type="button"></button>
     </div>
   </div>
 
-<script>
+<script id="guitartuner-dsp">
+/* GuitarTuner V11 DSP. No DOM, network, recording, or third-party dependency.
+ * YIN CMNDF: de Cheveigne & Kawahara, JASA 111 (2002), doi:10.1121/1.1458024.
+ * Spectral scores and thresholds below are application heuristics, not
+ * calibrated probabilities. A pure tone cannot reveal a missing fundamental.
+ */
+const GuitarTunerDSP = (() => {
+  'use strict';
+  const VERSION = '11.0.0';
+  const CONFIG = Object.freeze({
+    minHz: 55, maxHz: 1250, windowMs: 96, intervalMs: 60,
+    acquireRms: 0.00010, followRms: 0.000035,
+    acquireClarity: 0.86, followClarity: 0.78,
+    attackMs: 140, clusterCents: 24, nearCents: 65,
+    releaseMs: 420, displayHoldMs: 210
+  });
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const cents = (a, b) => 1200 * Math.log2(a / b);
+  const median = values => {
+    const s = values.slice().sort((a, b) => a - b);
+    const m = s.length >> 1;
+    return s.length ? (s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2) : null;
+  };
+  function gcd(a, b) { while (b) { const r = a % b; a = b; b = r; } return a; }
 
+  class FFT {
+    constructor(n) {
+      if (!Number.isInteger(n) || n < 2 || (n & (n - 1))) throw new Error('FFT size must be a power of two');
+      this.n = n;
+      this.re = new Float64Array(n);
+      this.im = new Float64Array(n);
+      this.mag = new Float64Array(n >> 1);
+      this.rev = new Uint32Array(n);
+      const bits = Math.log2(n);
+      for (let i = 0; i < n; i++) {
+        let x = i, r = 0;
+        for (let j = 0; j < bits; j++) { r = (r << 1) | (x & 1); x >>= 1; }
+        this.rev[i] = r;
+      }
+      this.cos = new Float64Array(n >> 1);
+      this.sin = new Float64Array(n >> 1);
+      for (let i = 0; i < n / 2; i++) {
+        this.cos[i] = Math.cos(-2 * Math.PI * i / n);
+        this.sin[i] = Math.sin(-2 * Math.PI * i / n);
+      }
+    }
+    spectrum(data, window) {
+      const { n, re, im, rev, mag } = this;
+      re.fill(0); im.fill(0);
+      for (let i = 0; i < data.length; i++) re[rev[i]] = data[i] * window[i];
+      for (let size = 2; size <= n; size *= 2) {
+        const half = size >> 1, step = n / size;
+        for (let start = 0; start < n; start += size) {
+          for (let j = 0; j < half; j++) {
+            const k = j * step, a = start + j, b = a + half;
+            const tr = this.cos[k] * re[b] - this.sin[k] * im[b];
+            const ti = this.cos[k] * im[b] + this.sin[k] * re[b];
+            re[b] = re[a] - tr; im[b] = im[a] - ti;
+            re[a] += tr; im[a] += ti;
+          }
+        }
+      }
+      for (let i = 0; i < mag.length; i++) mag[i] = Math.hypot(re[i], im[i]);
+      return mag;
+    }
+  }
+
+  class Detector {
+    constructor(sampleRate) {
+      if (!(sampleRate >= 8000 && sampleRate <= 192000)) throw new Error('Unsupported sample rate');
+      this.sampleRate = sampleRate;
+      // The live audio graph supplies two low-pass biquads before decimation.
+      // Box averaging adds attenuation but is not a substitute for that filter.
+      this.stride = Math.max(1, Math.floor(sampleRate / 12000));
+      this.rate = sampleRate / this.stride;
+      this.length = Math.round(this.rate * CONFIG.windowMs / 1000);
+      this.requiredSamples = this.length * this.stride;
+      this.data = new Float64Array(this.length);
+      this.maxTau = Math.ceil(this.rate / CONFIG.minHz) + 1;
+      this.minTau = Math.max(2, Math.floor(this.rate / CONFIG.maxHz) - 1);
+      this.diff = new Float64Array(this.maxTau + 1);
+      this.cmnd = new Float64Array(this.maxTau + 1);
+      this.window = new Float64Array(this.length);
+      for (let i = 0; i < this.length; i++) this.window[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (this.length - 1));
+      const nFFT = 2 ** Math.ceil(Math.log2(this.length * 2));
+      this.fft = new FFT(nFFT);
+    }
+    analyze(input) {
+      if (input.length < this.requiredSamples) throw new Error('Audio buffer is too short');
+      const n = this.length, start = input.length - this.requiredSamples, x = this.data;
+      let mean = 0, peak = 0;
+      for (let i = 0; i < n; i++) {
+        let v = 0;
+        for (let k = 0; k < this.stride; k++) {
+          const a = input[start + i * this.stride + k];
+          if (!Number.isFinite(a)) return { hz: null, rms: 0, recentRms: 0, clarity: 0, coverage: 0, reason: 'nonfinite' };
+          v += a; peak = Math.max(peak, Math.abs(a));
+        }
+        x[i] = v / this.stride; mean += x[i];
+      }
+      mean /= n;
+      let energy = 0, recent = 0;
+      const shortN = Math.round(this.rate * 0.012);
+      for (let i = 0; i < n; i++) {
+        x[i] -= mean; energy += x[i] * x[i];
+        if (i >= n - shortN) recent += x[i] * x[i];
+      }
+      const rms = Math.sqrt(energy / n), recentRms = Math.sqrt(recent / shortN);
+      const empty = { hz: null, yinHz: null, clarity: 0, coverage: 0, rms, recentRms, peak, corrected: false, reason: 'quiet' };
+      if (rms < CONFIG.followRms * 0.65) return empty;
+      // Level normalization changes numerical scale, not signal-to-noise ratio.
+      const norm = 1 / rms;
+      for (let i = 0; i < n; i++) x[i] *= norm;
+      const usable = n - this.maxTau, d = this.diff, y = this.cmnd;
+      let sumDiff = 0;
+      y[0] = 1;
+      for (let tau = 1; tau <= this.maxTau; tau++) {
+        let sum = 0;
+        for (let i = 0; i < usable; i++) {
+          const delta = x[i] - x[i + tau]; sum += delta * delta;
+        }
+        d[tau] = sum; sumDiff += sum;
+        y[tau] = sumDiff > 1e-12 ? sum * tau / sumDiff : 1;
+      }
+      const candidates = [];
+      for (let tau = this.minTau; tau < this.maxTau; tau++) {
+        if (y[tau] >= y[tau - 1] || y[tau] > y[tau + 1] || y[tau] > 0.30) continue;
+        // Interpolate the unnormalised difference minimum for pitch precision;
+        // evaluate periodicity using the normalised difference function.
+        const denom = d[tau - 1] - 2 * d[tau] + d[tau + 1];
+        const offset = Math.abs(denom) > 1e-10 ? clamp(0.5 * (d[tau - 1] - d[tau + 1]) / denom, -0.5, 0.5) : 0;
+        const hz = this.rate / (tau + offset);
+        if (hz < CONFIG.minHz || hz > CONFIG.maxHz) continue;
+        const clarity = clamp(1 - y[tau], 0, 1);
+        candidates.push({ hz, clarity, tau, coverage: 0 });
+      }
+      if (!candidates.length) return { ...empty, reason: 'aperiodic' };
+      const first = candidates.find(c => c.clarity >= 0.84) || candidates.reduce((a, b) => b.clarity > a.clarity ? b : a);
+      const peaks = this.spectralPeaks();
+      for (const c of candidates) {
+        const s = this.scoreSpectrum(c.hz, peaks);
+        c.coverage = s.coverage;
+        c.score = 0.50 * c.clarity + 0.46 * s.coverage + 0.04 * s.fundamental - s.subharmonicPenalty;
+      }
+      // In a tie prefer the shorter actual period, not an arbitrary sub-octave.
+      candidates.sort((a, b) => b.score - a.score || b.hz - a.hz);
+      const best = candidates[0];
+      if (best.clarity < 0.74 || best.coverage < 0.50) {
+        return { ...empty, yinHz: first.hz, clarity: best.clarity, coverage: best.coverage, reason: 'unclear' };
+      }
+      return {
+        hz: best.hz, yinHz: first.hz, clarity: best.clarity, coverage: best.coverage,
+        rms, recentRms, peak, corrected: Math.abs(cents(best.hz, first.hz)) > 80,
+        reason: 'periodic', candidateCount: candidates.length
+      };
+    }
+    spectralPeaks() {
+      const mag = this.fft.spectrum(this.data, this.window), bin = this.rate / this.fft.n;
+      const low = Math.max(2, Math.floor(40 / bin));
+      const high = Math.min(mag.length - 2, Math.ceil(4300 / bin));
+      let max = 0;
+      const floorSamples = [];
+      for (let i = low; i <= high; i++) { max = Math.max(max, mag[i]); if (i % 5 === 0) floorSamples.push(mag[i]); }
+      const floor = median(floorSamples) || 0;
+      const threshold = Math.max(max * 0.012, floor * 5);
+      const peaks = [];
+      for (let i = low; i <= high; i++) {
+        if (mag[i] < threshold || mag[i] <= mag[i - 1] || mag[i] < mag[i + 1]) continue;
+        const a = Math.log(Math.max(mag[i - 1], 1e-20));
+        const b = Math.log(Math.max(mag[i], 1e-20));
+        const c = Math.log(Math.max(mag[i + 1], 1e-20));
+        const denom = a - 2 * b + c;
+        const offset = Math.abs(denom) > 1e-9 ? clamp(0.5 * (a - c) / denom, -0.5, 0.5) : 0;
+        peaks.push({ hz: (i + offset) * bin, weight: Math.pow(mag[i] / Math.max(max, 1e-20), 0.6) });
+      }
+      return peaks.sort((a, b) => b.weight - a.weight).slice(0, 24);
+    }
+    scoreSpectrum(f, peaks) {
+      let total = 0, explained = 0, fundamental = 0, divisor = 0;
+      for (const p of peaks) {
+        total += p.weight;
+        const h = Math.round(p.hz / f);
+        if (h < 1 || h > 16) continue;
+        const tolerance = Math.max(3.5, p.hz * 0.011);
+        if (Math.abs(p.hz - h * f) > tolerance) continue;
+        explained += p.weight;
+        divisor = gcd(divisor, h);
+        if (h === 1) fundamental = Math.max(fundamental, p.weight);
+      }
+      // If only every second/third predicted harmonic exists, the lower
+      // fundamental is unproven. Never divide simply to fit the selected string.
+      return { coverage: total ? explained / total : 0, fundamental, subharmonicPenalty: divisor > 1 ? 0.20 : 0 };
+    }
+  }
+
+  class Tracker {
+    constructor() { this.reset(); }
+    reset() {
+      this.state = 'IDLE'; this.locked = null; this.lastGood = -Infinity;
+      this.attackUntil = -Infinity; this.lastOnset = -Infinity;
+      this.prevRms = 0; this.queue = []; this.near = []; this.lastTime = -Infinity;
+    }
+    cluster(queue, required, span) {
+      const good = queue.filter(v => v && Number.isFinite(v.hz));
+      if (good.length < required) return null;
+      const anchor = good[good.length - 1].hz;
+      const close = good.filter(v => Math.abs(cents(v.hz, anchor)) <= CONFIG.clusterCents);
+      if (close.length < required || close[close.length - 1].time - close[0].time < span) return null;
+      const log = median(close.map(v => Math.log2(v.hz)));
+      return 2 ** log;
+    }
+    update(frame, timeMs) {
+      if (!Number.isFinite(timeMs)) throw new Error('Tracker needs a monotonic timestamp');
+      if (timeMs - this.lastTime > 1000 || timeMs < this.lastTime) this.reset();
+      const dt = Math.max(1, timeMs - this.lastTime); this.lastTime = timeMs;
+      const f = frame.hz;
+      const level = frame.recentRms || 0;
+      const newAttack = level > Math.max(CONFIG.acquireRms * 2.5, this.prevRms * 3.2)
+        && timeMs - this.lastOnset > 300;
+      this.prevRms = level;
+      if (newAttack) {
+        this.lastOnset = timeMs; this.attackUntil = timeMs + CONFIG.attackMs;
+        this.locked = null; this.queue = []; this.near = []; this.state = 'ATTACK';
+      }
+      const hadLock = this.locked !== null;
+      const gate = hadLock ? CONFIG.followRms : CONFIG.acquireRms;
+      const quality = hadLock ? CONFIG.followClarity : CONFIG.acquireClarity;
+      const valid = f && frame.rms >= gate && frame.clarity >= quality && frame.coverage >= 0.50;
+      if (timeMs < this.attackUntil) return { hz: null, state: 'ATTACK', held: false };
+      if (!valid) {
+        this.queue.push(null); if (this.queue.length > 5) this.queue.shift();
+        this.near = [];
+        if (hadLock && timeMs - this.lastGood <= CONFIG.releaseMs) {
+          this.state = 'HOLD';
+          return { hz: timeMs - this.lastGood <= CONFIG.displayHoldMs ? this.locked : null, state: 'HOLD', held: true };
+        }
+        this.locked = null;
+        this.state = frame.rms >= CONFIG.acquireRms ? 'ACQUIRE' : 'IDLE';
+        return { hz: null, state: this.state, held: false };
+      }
+      if (!hadLock) {
+        this.queue.push({ hz: f, time: timeMs }); if (this.queue.length > 5) this.queue.shift();
+        const acquired = this.cluster(this.queue, 4, 150);
+        if (!acquired) { this.state = 'ACQUIRE'; return { hz: null, state: this.state, held: false }; }
+        this.locked = acquired; this.lastGood = timeMs; this.near = [Math.log2(acquired)]; this.queue = [];
+        this.state = 'LOCKED'; return { hz: this.locked, state: this.state, held: false };
+      }
+      if (Math.abs(cents(f, this.locked)) <= CONFIG.nearCents) {
+        this.queue = [];
+        this.near.push(Math.log2(f)); if (this.near.length > 3) this.near.shift();
+        const target = median(this.near), old = Math.log2(this.locked);
+        const alpha = 1 - Math.exp(-Math.min(dt, 120) / 95);
+        this.locked = 2 ** (old + alpha * (target - old)); this.lastGood = timeMs;
+        this.state = 'LOCKED'; return { hz: this.locked, state: this.state, held: false };
+      }
+      this.queue.push({ hz: f, time: timeMs }); if (this.queue.length > 5) this.queue.shift();
+      const ratio = Math.max(f / this.locked, this.locked / f);
+      const harmonicJump = [2, 3, 4].some(h => Math.abs(cents(ratio, h)) < 40);
+      const replacement = this.cluster(this.queue, harmonicJump ? 5 : 4, harmonicJump ? 230 : 150);
+      if (replacement) {
+        // Crucial: a confirmed new note replaces the old one immediately.
+        // Never average unrelated notes into fictitious intermediate pitches.
+        this.locked = replacement; this.lastGood = timeMs; this.near = [Math.log2(replacement)]; this.queue = [];
+        this.state = 'LOCKED'; return { hz: this.locked, state: this.state, held: false, switched: true };
+      }
+      this.state = 'CHANGE';
+      return { hz: null, state: this.state, held: false };
+    }
+  }
+  return Object.freeze({ VERSION, CONFIG, Detector, Tracker, FFT, cents });
+})();
+
+</script>
+<script id="guitartuner-ui">
+/* Browser UI and microphone lifecycle. Kept separate from the pure DSP above. */
 (() => {
+  'use strict';
   const translations = {
     de: {
       normal: "Normal",
@@ -673,654 +1001,397 @@
     }
   };
 
-  function detectSystemLanguage() {
-    const preferred = (navigator.languages && navigator.languages.length
-      ? navigator.languages[0]
-      : navigator.language || "en").toLowerCase();
-    return preferred.startsWith("de") ? "de" : "en";
-  }
 
-  let languagePreference = localStorage.getItem("guitartuner-language") || "auto";
-  let language = languagePreference === "auto" ? detectSystemLanguage() : languagePreference;
-  let localeTag = language === "de" ? "de-DE" : "en-US";
-
-  function updateDocumentLanguage() {
-    document.documentElement.lang = language;
-    localeTag = language === "de" ? "de-DE" : "en-US";
-  }
-
-  updateDocumentLanguage();
-
-  function t(key, vars = {}) {
-    let value = translations[language][key] ?? translations.en[key] ?? key;
-    for (const [name, replacement] of Object.entries(vars)) {
-      value = value.replaceAll(`{${name}}`, String(replacement));
-    }
-    return value;
-  }
-
-  function fmt1(value) {
-    return new Intl.NumberFormat(localeTag, {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1
-    }).format(value);
-  }
-
-  function getNoteNames() {
-    return language === "de"
-      ? ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "H"]
-      : ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
-  }
-
-  const noteEl = document.getElementById("note");
-  const frequencyEl = document.getElementById("frequency");
-  const targetLine = document.getElementById("targetLine");
-  const needleEl = document.getElementById("needle");
-  const resultMain = document.getElementById("resultMain");
-  const resultSub = document.getElementById("resultSub");
-  const micState = document.getElementById("micState");
-  const startHint = document.getElementById("startHint");
-  const normalModeBtn = document.getElementById("normalMode");
-  const beginnerModeBtn = document.getElementById("beginnerMode");
-  const beginnerPanel = document.getElementById("beginnerPanel");
-  const stringButtons = [...document.querySelectorAll(".string-btn")];
-  const settingsButton = document.getElementById("settingsButton");
-  const settingsModal = document.getElementById("settingsModal");
-  const doneButton = document.getElementById("doneButton");
-  const a4Input = document.getElementById("a4");
-  const languageLabel = document.getElementById("languageLabel");
-  const languageSelect = document.getElementById("languageSelect");
-
-  let audioContext = null;
-  let stream = null;
-  let source = null;
-  let highpass = null;
-  let lowpass = null;
-  let inputGain = null;
-  let analyser = null;
-  let buffer = null;
-  let animationId = null;
-  let running = false;
-  let starting = false;
-  let lastAnalysis = 0;
-
-  let mode = localStorage.getItem("guitartuner-mode") || "normal";
-  let targetString = Number(localStorage.getItem("guitartuner-string")) || 1;
-  let targetFreq = 82.4069;
-  let targetNote = "E2";
-
-  const savedA4 = Number(localStorage.getItem("guitartuner-a4"));
-  if (savedA4 >= 430 && savedA4 <= 450) a4Input.value = savedA4;
-
-  let lastPitchCandidateAt = 0;
-  let attackUntil = 0;
-  let pitchHistory = [];
-  let stablePitch = null;
-  let lastStableAt = 0;
-
-  function localizedTargetLetter() {
-    if (targetString === 5) return language === "de" ? "H" : "B";
-    return targetNote.replace(/[0-9]/g, "");
-  }
-
-  function localizedStringName(n) {
-    if (n === 1) return t("lowE");
-    if (n === 6) return t("highE");
-    if (n === 5) return language === "de" ? "H" : "B";
-    const btn = stringButtons.find(b => Number(b.dataset.string) === n);
-    return btn ? btn.dataset.note.replace(/[0-9]/g, "") : "";
-  }
-
-  function updateTargetLine() {
-    if (mode === "beginner") {
-      targetLine.textContent = t("targetString", {
-        n: targetString,
-        name: localizedStringName(targetString),
-        hz: fmt1(targetFreq)
-      });
-    } else {
-      targetLine.textContent = t("chromaticTuner");
-    }
-  }
-
-  function applyStaticTranslations() {
-    normalModeBtn.textContent = t("normal");
-    beginnerModeBtn.textContent = t("beginner");
-
-    document.getElementById("meterLow").textContent = t("low");
-    document.getElementById("meterCorrect").textContent = t("correct");
-    document.getElementById("meterHigh").textContent = t("high");
-
-    document.getElementById("settingsTitle").textContent = t("settings");
-    document.getElementById("a4Label").textContent = t("referenceA4");
-    languageLabel.textContent = t("language");
-    document.getElementById("settingsHint").textContent = t("standard440");
-    doneButton.textContent = t("done");
-
-    languageSelect.options[0].textContent = t("languageAuto");
-    languageSelect.options[1].textContent = "Deutsch";
-    languageSelect.options[2].textContent = "English";
-    languageSelect.value = languagePreference;
-
-    settingsButton.setAttribute("aria-label", t("settingsAria"));
-    micState.setAttribute("aria-label", t("micActive"));
-    document.getElementById("modeSwitch").setAttribute("aria-label", t("modeAria"));
-    beginnerPanel.setAttribute("aria-label", t("stringsAria"));
-    document.getElementById("meter").setAttribute("aria-label", t("meterAria"));
-
-    const edge1 = stringButtons[0].querySelector(".edge");
-    const edge6 = stringButtons[5].querySelector(".edge");
-    edge1.textContent = t("thick");
-    edge6.textContent = t("thin");
-    document.getElementById("fifthStringLetter").textContent = language === "de" ? "H" : "B";
-  }
-
-  function applyLanguagePreference(preference) {
-    languagePreference = preference;
-    localStorage.setItem("guitartuner-language", languagePreference);
-
-    language = languagePreference === "auto" ? detectSystemLanguage() : languagePreference;
-    updateDocumentLanguage();
-
-    applyStaticTranslations();
-    updateTargetLine();
-    resetReading();
-  }
-
-  function getA4() {
-    const value = Number(a4Input.value);
-    return Number.isFinite(value) && value >= 430 && value <= 450 ? value : 440;
-  }
-
-  function midiFromFrequency(freq) {
-    return 69 + 12 * Math.log2(freq / getA4());
-  }
-
-  function median(values) {
-    if (!values.length) return null;
-    const sorted = [...values].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-
-  function centsBetween(a, b) {
-    return 1200 * Math.log2(a / b);
-  }
-
-  function setNeedle(cents, good = false) {
-    const limited = Math.max(-50, Math.min(50, cents));
-    needleEl.style.transform = `translateX(-50%) rotate(${limited * 0.9}deg)`;
-    needleEl.style.background = good ? "var(--ok)" : "var(--warn)";
-    needleEl.style.boxShadow = good
-      ? "0 0 15px rgba(48,209,88,.55)"
-      : "0 0 14px rgba(255,159,10,.38)";
-  }
-
-  function resetReading() {
-    pitchHistory = [];
-    stablePitch = null;
-    setNeedle(0, false);
-
-    if (mode === "beginner") {
-      noteEl.textContent = localizedTargetLetter();
-      frequencyEl.textContent = t("targetHz", { hz: fmt1(targetFreq) });
-      resultMain.textContent = t("pluckString");
-      resultSub.textContent = t("pluckSelected", { n: targetString });
-    } else {
-      noteEl.innerHTML = "&nbsp;";
-      frequencyEl.textContent = running ? t("waitStable") : t("micPreparing");
-      resultMain.textContent = running ? t("pluckString") : t("ready");
-      resultSub.textContent = running ? t("pluckSingle") : t("autoMic");
-    }
-  }
-
-  function updateNormal(freq) {
-    const midi = midiFromFrequency(freq);
-    const nearest = Math.round(midi);
-    const cents = (midi - nearest) * 100;
-    const noteIndex = ((nearest % 12) + 12) % 12;
-    const octave = Math.floor(nearest / 12) - 1;
-    const inTune = Math.abs(cents) <= 4;
-
-    noteEl.textContent = getNoteNames()[noteIndex] + octave;
-    frequencyEl.textContent = `${fmt1(freq)} Hz`;
-    setNeedle(cents, inTune);
-
-    if (inTune) {
-      resultMain.textContent = t("fits");
-      resultSub.textContent = t("toneInTune");
-    } else if (cents < 0) {
-      resultMain.textContent = t("tooLow");
-      resultSub.textContent = t("centsBelow", { cents: Math.round(Math.abs(cents)) });
-    } else {
-      resultMain.textContent = t("tooHigh");
-      resultSub.textContent = t("centsAbove", { cents: Math.round(Math.abs(cents)) });
-    }
-  }
-
-  function foldToTargetOctave(freq) {
-    let adjusted = freq;
-    while (adjusted > targetFreq * 1.75) adjusted /= 2;
-    while (adjusted < targetFreq / 1.75) adjusted *= 2;
-    return adjusted;
-  }
-
-  function updateBeginner(freq) {
-    const adjusted = foldToTargetOctave(freq);
-    const cents = centsBetween(adjusted, targetFreq);
-    const absCents = Math.abs(cents);
-    const inTune = absCents <= 5;
-
-    noteEl.textContent = localizedTargetLetter();
-    frequencyEl.textContent = t("measuredTarget", {
-      measured: fmt1(adjusted),
-      target: fmt1(targetFreq)
-    });
-    setNeedle(cents, inTune);
-
-    if (inTune) {
-      resultMain.textContent = t("fitsCheck");
-      resultSub.textContent = t("stringInTune", { n: targetString });
-      return;
-    }
-
-    if (cents < 0) {
-      resultMain.textContent = t("tighten");
-      resultSub.textContent = absCents > 100 ? t("muchTooLow") : t("tightenLittle");
-    } else {
-      resultMain.textContent = t("loosen");
-      resultSub.textContent = absCents > 100 ? t("muchTooHigh") : t("loosenLittle");
-    }
-  }
-
-  function updateDisplay(freq) {
-    if (mode === "beginner") updateBeginner(freq);
-    else updateNormal(freq);
-  }
-
-  function rmsOf(data) {
-    let mean = 0;
-    for (let i = 0; i < data.length; i++) mean += data[i];
-    mean /= data.length;
-
-    let sum = 0;
-    for (let i = 0; i < data.length; i++) {
-      const x = data[i] - mean;
-      sum += x * x;
-    }
-    return Math.sqrt(sum / data.length);
-  }
-
-  function detectPitchYIN(data, sampleRate) {
-    const minFreq = 62;
-    const maxFreq = 1250;
-    const yinThreshold = 0.23;
-    const minTau = Math.max(2, Math.floor(sampleRate / maxFreq));
-    const maxTau = Math.min(Math.floor(sampleRate / minFreq), Math.floor(data.length / 2) - 1);
-
-    const rms = rmsOf(data);
-    if (rms < 0.00032) return { freq: null, rms };
-
-    let mean = 0;
-    for (let i = 0; i < data.length; i++) mean += data[i];
-    mean /= data.length;
-
-    const yin = new Float32Array(maxTau + 1);
-    const usable = data.length - maxTau - 1;
-
-    for (let tau = 1; tau <= maxTau; tau++) {
-      let sum = 0;
-      for (let i = 0; i < usable; i++) {
-        const d = (data[i] - mean) - (data[i + tau] - mean);
-        sum += d * d;
-      }
-      yin[tau] = sum;
-    }
-
-    yin[0] = 1;
-    let runningSum = 0;
-    for (let tau = 1; tau <= maxTau; tau++) {
-      runningSum += yin[tau];
-      yin[tau] = runningSum > 0 ? yin[tau] * tau / runningSum : 1;
-    }
-
-    let tauEstimate = -1;
-    for (let tau = minTau; tau <= maxTau; tau++) {
-      if (yin[tau] < yinThreshold) {
-        while (tau + 1 <= maxTau && yin[tau + 1] < yin[tau]) tau++;
-        tauEstimate = tau;
-        break;
-      }
-    }
-
-    if (tauEstimate < 0) {
-      let bestTau = minTau;
-      for (let tau = minTau + 1; tau <= maxTau; tau++) {
-        if (yin[tau] < yin[bestTau]) bestTau = tau;
-      }
-      if (yin[bestTau] > 0.50) return { freq: null, rms };
-      tauEstimate = bestTau;
-    }
-
-    const left = Math.max(minTau, tauEstimate - 1);
-    const right = Math.min(maxTau, tauEstimate + 1);
-    let betterTau = tauEstimate;
-
-    if (left !== tauEstimate && right !== tauEstimate) {
-      const s0 = yin[left];
-      const s1 = yin[tauEstimate];
-      const s2 = yin[right];
-      const denom = 2 * (2 * s1 - s2 - s0);
-      if (Math.abs(denom) > 1e-12) betterTau = tauEstimate + (s2 - s0) / denom;
-    }
-
-    const freq = sampleRate / betterTau;
-    if (!Number.isFinite(freq) || freq < minFreq || freq > maxFreq) return { freq: null, rms };
-    return { freq, rms };
-  }
-
-  function processDetection(detected, rms, now) {
-    if (!detected) {
-      if (lastPitchCandidateAt && now - lastPitchCandidateAt > 650) {
-        resetReading();
-        lastPitchCandidateAt = 0;
-      }
-      return;
-    }
-
-    if (!lastPitchCandidateAt || now - lastPitchCandidateAt > 420) {
-      attackUntil = now + 190;
-      pitchHistory = [];
-      stablePitch = null;
-    }
-    lastPitchCandidateAt = now;
-
-    if (now < attackUntil) {
-      resultMain.textContent = "…";
-      resultSub.textContent = t("settling");
-      return;
-    }
-
-    pitchHistory.push(Math.log2(detected));
-    if (pitchHistory.length > 7) pitchHistory.shift();
-    if (pitchHistory.length < 3) return;
-
-    const medLog = median(pitchHistory);
-    const deviations = pitchHistory.map(v => Math.abs((v - medLog) * 1200));
-    const medianDeviation = median(deviations);
-    if (medianDeviation > 22) return;
-
-    const candidate = Math.pow(2, medLog);
-
-    if (stablePitch == null) {
-      stablePitch = candidate;
-    } else {
-      const jump = Math.abs(centsBetween(candidate, stablePitch));
-      if (jump > 90 && now - lastStableAt < 350) return;
-
-      const oldLog = Math.log2(stablePitch);
-      const newLog = Math.log2(candidate);
-      stablePitch = Math.pow(2, oldLog * 0.72 + newLog * 0.28);
-    }
-
-    lastStableAt = now;
-    updateDisplay(stablePitch);
-  }
-
-  function tick(now) {
-    if (!running || !analyser) return;
-
-    if (now - lastAnalysis >= 75) {
-      lastAnalysis = now;
-      analyser.getFloatTimeDomainData(buffer);
-      const { freq, rms } = detectPitchYIN(buffer, audioContext.sampleRate);
-      processDetection(freq, rms, performance.now());
-    }
-
-    animationId = requestAnimationFrame(tick);
-  }
-
-  function showStartHint(message, isError = false) {
-    startHint.textContent = message;
-    startHint.classList.remove("hidden");
-    startHint.classList.toggle("error", isError);
-  }
-
-  function hideStartHint() {
-    startHint.classList.add("hidden");
-    startHint.classList.remove("error");
-  }
-
-  async function createAudioGraph() {
-    if (!stream) return false;
-
-    if (!audioContext) {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)({
-        latencyHint: "interactive"
-      });
-    }
-
-    if (!analyser) {
-      source = audioContext.createMediaStreamSource(stream);
-
-      highpass = audioContext.createBiquadFilter();
-      highpass.type = "highpass";
-      highpass.frequency.value = 45;
-      highpass.Q.value = 0.7;
-
-      lowpass = audioContext.createBiquadFilter();
-      lowpass.type = "lowpass";
-      lowpass.frequency.value = 1500;
-      lowpass.Q.value = 0.7;
-
-      inputGain = audioContext.createGain();
-      inputGain.gain.value = 3.5;
-
-      analyser = audioContext.createAnalyser();
-      analyser.fftSize = 8192;
-      analyser.smoothingTimeConstant = 0;
-
-      source.connect(highpass);
-      highpass.connect(lowpass);
-      lowpass.connect(inputGain);
-      inputGain.connect(analyser);
-
-      buffer = new Float32Array(analyser.fftSize);
-    }
-
-    try {
-      if (audioContext.state !== "running") await audioContext.resume();
-    } catch (_) {}
-
-    return audioContext.state === "running";
-  }
-
-  function finishMicrophoneStart() {
-    starting = false;
-
-    if (!running) {
-      running = true;
-      lastPitchCandidateAt = 0;
-      pitchHistory = [];
-      stablePitch = null;
-
-      micState.classList.add("active");
-      resetReading();
-
-      if (animationId) cancelAnimationFrame(animationId);
-      animationId = requestAnimationFrame(tick);
-    }
-
-    hideStartHint();
-  }
-
-  async function requestMicrophone(autoAttempt = false) {
-    if (running || starting) return;
-
-    if (!window.isSecureContext) {
-      showStartHint(t("micHttps"), true);
-      frequencyEl.textContent = t("micHttpsFreq");
-      return;
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia) {
-      showStartHint(t("micUnsupported"), true);
-      return;
-    }
-
-    starting = true;
-
-    try {
-      if (!stream) {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: true,
-            channelCount: 1
-          }
-        });
-      }
-
-      const ready = await createAudioGraph();
-
-      if (ready) {
-        finishMicrophoneStart();
-      } else {
-        starting = false;
-        showStartHint(t("tapStart"));
-      }
-    } catch (error) {
-      console.error(error);
-      starting = false;
-
-      if (autoAttempt) {
-        showStartHint(t("tapStart"));
-      } else if (error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError") {
-        showStartHint(t("allowRetry"), true);
-      } else if (error?.name === "NotFoundError" || error?.name === "DevicesNotFoundError") {
-        showStartHint(t("noMic"), true);
-      } else {
-        showStartHint(t("micFailed"), true);
-      }
-    }
-  }
-
-  async function startFromGesture() {
-    if (running || starting) return;
-
-    try {
-      if (audioContext && audioContext.state !== "running") {
-        await audioContext.resume();
-      }
-    } catch (_) {}
-
-    if (stream) {
-      starting = true;
-      const ready = await createAudioGraph();
-      starting = false;
-
-      if (ready) {
-        finishMicrophoneStart();
-        return;
-      }
-    }
-
-    await requestMicrophone(false);
-  }
-
-  function chooseString(button) {
-    stringButtons.forEach(btn => btn.classList.remove("active"));
-    button.classList.add("active");
-
-    targetString = Number(button.dataset.string);
-    targetFreq = Number(button.dataset.freq);
-    targetNote = button.dataset.note;
-    localStorage.setItem("guitartuner-string", String(targetString));
-
-    updateTargetLine();
-    resetReading();
-  }
-
-  function setMode(nextMode) {
-    mode = nextMode;
-    localStorage.setItem("guitartuner-mode", mode);
-
-    const beginner = mode === "beginner";
-    normalModeBtn.classList.toggle("active", !beginner);
-    beginnerModeBtn.classList.toggle("active", beginner);
-    beginnerPanel.classList.toggle("hidden", !beginner);
-
-    pitchHistory = [];
-    stablePitch = null;
-
-    if (beginner) {
-      const selected = stringButtons.find(btn => Number(btn.dataset.string) === targetString) || stringButtons[0];
-      chooseString(selected);
-    } else {
-      updateTargetLine();
-      resetReading();
-    }
-  }
-
-  function openSettings() {
-    settingsModal.classList.remove("hidden");
-  }
-
-  function closeSettings() {
-    const value = getA4();
-    a4Input.value = value;
-    localStorage.setItem("guitartuner-a4", String(value));
-
-    const selectedLanguage = languageSelect.value;
-    if (selectedLanguage !== languagePreference) {
-      applyLanguagePreference(selectedLanguage);
-    }
-
-    settingsModal.classList.add("hidden");
-    pitchHistory = [];
-    stablePitch = null;
-  }
-
-  const gestureStart = () => {
-    if (!running && !starting) startFromGesture();
+  Object.assign(translations.de, {
+    recognizing: 'Ton wird erkannt', unstable: 'Bitte nur eine Saite anschlagen.',
+    held: 'Ton klingt aus', checkString: 'SAITE PR\u00dcFEN',
+    checkStringHelp: 'Gro\u00dfe Abweichung: richtige Saite und Mechanik pr\u00fcfen.',
+    diagnostics: 'Diagnose (optional)', diagEnable: 'Messwerte mitschreiben',
+    diagHelp: 'Nur Messwerte, keine Tonaufnahme. Maximal die letzten 3.000 Messungen im Arbeitsspeicher. Kein Upload.',
+    diagCount: '{n} Messungen \u00b7 {marks} Markierungen', diagExport: 'JSON exportieren',
+    diagMark: 'Problem markieren', diagClear: 'L\u00f6schen', diagIndicator: 'Diagnose aktiv',
+    micWaiting: 'Mikrofonzugriff bitte im Browser erlauben',
+    micBusy: 'Mikrofon nicht lesbar. Andere Audio-Apps und Systemfreigabe pr\u00fcfen.',
+    micEnded: 'Mikrofon unterbrochen. Zum Fortsetzen tippen oder klicken.',
+    micPaused: 'Audio pausiert. Zum Fortsetzen tippen oder klicken.',
+    internalError: 'Audiofehler. Seite neu laden; Details stehen in der Browserkonsole.',
+    tapStart: 'Zum Starten einmal tippen oder klicken',
+    tapResume: 'Zum Fortsetzen einmal tippen oder klicken',
+    standard440: 'A4 gilt f\u00fcr beide Modi. Standard: 440 Hz.'
+  });
+  Object.assign(translations.en, {
+    recognizing: 'Detecting note', unstable: 'Please pluck just one string.',
+    held: 'Note is fading', checkString: 'CHECK STRING',
+    checkStringHelp: 'Large difference: check the selected string and tuning peg.',
+    diagnostics: 'Diagnostics (optional)', diagEnable: 'Log measurements',
+    diagHelp: 'Measurements only, no audio recording. The last 3,000 frames stay in memory. Nothing is uploaded.',
+    diagCount: '{n} frames \u00b7 {marks} markers', diagExport: 'Export JSON',
+    diagMark: 'Mark problem', diagClear: 'Clear', diagIndicator: 'Diagnostics on',
+    micWaiting: 'Please allow microphone access in your browser',
+    micBusy: 'Cannot read microphone. Check other audio apps and system permissions.',
+    micEnded: 'Microphone interrupted. Tap or click to continue.',
+    micPaused: 'Audio paused. Tap or click to continue.',
+    internalError: 'Audio error. Reload the page; details are in the browser console.',
+    tapStart: 'Tap or click once to start', tapResume: 'Tap or click once to resume',
+    standard440: 'A4 applies to both modes. Default: 440 Hz.'
+  });
+
+  const $ = id => document.getElementById(id);
+  const storage = {
+    get(key) { try { return localStorage.getItem(key); } catch (_) { return null; } },
+    set(key, value) { try { localStorage.setItem(key, value); } catch (_) {} }
   };
+  function detectSystemLanguage() {
+    const preferred = (navigator.languages?.[0] || navigator.language || 'en').toLowerCase();
+    return preferred.startsWith('de') ? 'de' : 'en';
+  }
+  const validLanguage = p => ['auto', 'de', 'en'].includes(p) ? p : 'auto';
+  let languagePreference = validLanguage(storage.get('guitartuner-language'));
+  let language, formatter;
+  function updateDocumentLanguage() {
+    language = languagePreference === 'auto' ? detectSystemLanguage() : languagePreference;
+    document.documentElement.lang = language;
+    formatter = new Intl.NumberFormat(language === 'de' ? 'de-DE' : 'en-US', {minimumFractionDigits:1, maximumFractionDigits:1});
+  }
+  function t(key, vars = {}) {
+    return (translations[language][key] || translations.en[key] || key)
+      .replace(/\{(\w+)\}/g, (match, name) => name in vars ? String(vars[name]) : match);
+  }
+  const fmt1 = value => formatter.format(value);
+  const noteNames = () => ['C','C\u266f','D','D\u266f','E','F','F\u266f','G','G\u266f','A','A\u266f',language === 'de' ? 'H' : 'B'];
+  updateDocumentLanguage();
+  const noteEl=$('note'), frequencyEl=$('frequency'), targetLine=$('targetLine'), needleEl=$('needle');
+  const resultMain=$('resultMain'), resultSub=$('resultSub'), micState=$('micState'), startHint=$('startHint');
+  const normalModeBtn=$('normalMode'), beginnerModeBtn=$('beginnerMode'), beginnerPanel=$('beginnerPanel');
+  const stringButtons=[...document.querySelectorAll('.string-btn')];
+  const settingsModal=$('settingsModal'), a4Input=$('a4'), languageSelect=$('languageSelect');
+  const card=document.querySelector('.main-card');
+  let mode = storage.get('guitartuner-mode') === 'beginner' ? 'beginner' : 'normal';
+  let targetString=Number(storage.get('guitartuner-string')) || 1;
+  if (!Number.isInteger(targetString) || targetString < 1 || targetString > 6) targetString=1;
+  const savedA4=Number(storage.get('guitartuner-a4'));
+  let referenceA4 = savedA4>=430 && savedA4<=450 ? savedA4 : 440;
+  a4Input.value=String(referenceA4);
+  let targetFreq=0, targetNote='E2', displayMidi=null, tuneActive=false;
+  let hintKey=null, hintError=false;
 
-  document.addEventListener("pointerdown", gestureStart, { passive: true });
-  document.addEventListener("touchend", gestureStart, { passive: true });
-  document.addEventListener("keydown", gestureStart);
+  let audioContext=null, stream=null, source=null, analyser=null, buffer=null, audioNodes=[];
+  let detector=null, tracker=new GuitarTunerDSP.Tracker();
+  let running=false, requestPending=null, animationId=null, lastAnalysis=-Infinity, lastAudioTime=-1;
+  let pageActive=true, requestGeneration=0;
+  let diagnosticsEnabled=false, diagnosticRows=[], diagPosition=0, diagStarted=0, diagStartedISO=null, markerCount=0, nextMarker=0;
+  const MAX_DIAGNOSTICS=3000;
 
-  normalModeBtn.addEventListener("click", () => setMode("normal"));
-  beginnerModeBtn.addEventListener("click", () => setMode("beginner"));
-  stringButtons.forEach(btn => btn.addEventListener("click", () => chooseString(btn)));
-  settingsButton.addEventListener("click", openSettings);
-  languageSelect.addEventListener("change", () => {
-    applyLanguagePreference(languageSelect.value);
-  });
+  const getA4=() => referenceA4;
+  function currentStringButton() { return stringButtons[targetString-1]; }
+  function localizedTargetLetter() {
+    return targetString===5 ? (language==='de'?'H':'B') : targetNote.replace(/[0-9]/g,'');
+  }
+  function updateTargetLine() {
+    targetNote=currentStringButton().dataset.note;
+    targetFreq=Number(currentStringButton().dataset.freq) * getA4() / 440;
+    const name=targetString===1 ? t('lowE') : targetString===6 ? t('highE') : localizedTargetLetter();
+    targetLine.textContent=mode==='beginner' ? t('targetString',{n:targetString,name,hz:fmt1(targetFreq)}) : t('chromaticTuner');
+  }
+  function applyStaticTranslations() {
+    const texts={normalMode:'normal',beginnerMode:'beginner',meterLow:'low',meterCorrect:'correct',meterHigh:'high',
+      settingsTitle:'settings',a4Label:'referenceA4',languageLabel:'language',settingsHint:'standard440',doneButton:'done',
+      diagSummary:'diagnostics',diagLabel:'diagEnable',diagHelp:'diagHelp',diagExport:'diagExport',diagMark:'diagMark',diagClear:'diagClear',diagBadge:'diagIndicator'};
+    for(const [id,key] of Object.entries(texts))$(id).textContent=t(key);
+    languageSelect.options[0].textContent=t('languageAuto'); languageSelect.value=languagePreference;
+    $('settingsButton').setAttribute('aria-label',t('settingsAria'));
+    micState.setAttribute('aria-label',t('micActive'));
+    $('modeSwitch').setAttribute('aria-label',t('modeAria'));
+    beginnerPanel.setAttribute('aria-label',t('stringsAria'));
+    $('meter').setAttribute('aria-label',t('meterAria'));
+    stringButtons[0].querySelector('.edge').textContent=t('thick');
+    stringButtons[5].querySelector('.edge').textContent=t('thin');
+    $('fifthStringLetter').textContent=language==='de'?'H':'B';
+    for(const [i,b] of stringButtons.entries()) b.setAttribute('aria-label',`${i+1}: ${i===4?(language==='de'?'H':'B'):b.dataset.note}`);
+    if(hintKey)showStartHint(hintKey,hintError);
+    refreshDiagnostics();
+  }
+  function applyLanguagePreference(pref) {
+    languagePreference=validLanguage(pref); storage.set('guitartuner-language',languagePreference);
+    updateDocumentLanguage(); applyStaticTranslations(); updateTargetLine(); resetReading();
+  }
+  function setNeedle(value,good=false) {
+    needleEl.style.transform=`translateX(-50%) rotate(${Math.max(-50,Math.min(50,value))*0.9}deg)`;
+    needleEl.style.background=good?'var(--ok)':'var(--warn)';
+    needleEl.style.boxShadow=good?'0 0 15px rgba(48,209,88,.55)':'0 0 14px rgba(255,159,10,.38)';
+  }
+  function showWaiting(state='IDLE') {
+    card.classList.add('unlocked'); card.classList.remove('held');
+    tuneActive=false; displayMidi=null;
+    noteEl.textContent=mode==='beginner'?localizedTargetLetter():'\u00a0';
+    const detecting=['ATTACK','ACQUIRE','CHANGE','HOLD'].includes(state);
+    frequencyEl.textContent=mode==='beginner'?t('targetHz',{hz:fmt1(targetFreq)}):detecting?t('waitStable'):running?t('waitStable'):t('micPreparing');
+    resultMain.textContent=detecting?t('recognizing'):running?t('pluckString'):t('ready');
+    resultSub.textContent=detecting?t('unstable'):mode==='beginner'?t('pluckSelected',{n:targetString}):running?t('pluckSingle'):t('autoMic');
+    setNeedle(0);
+  }
+  function resetReading() { tracker.reset(); showWaiting(); }
+  function updateDisplay(freq) {
+    card.classList.remove('unlocked','held');
+    let cents;
+    if(mode==='beginner') {
+      cents=GuitarTunerDSP.cents(freq,targetFreq);
+      noteEl.textContent=localizedTargetLetter();
+      frequencyEl.textContent=t('measuredTarget',{measured:fmt1(freq),target:fmt1(targetFreq)});
+      // Do not manufacture the expected octave. A gross mismatch could be the
+      // wrong string or a harmonic, so do not issue unsafe winding directions.
+      if(Math.abs(cents)>700) {
+        card.classList.add('unlocked'); tuneActive=false;
+        resultMain.textContent=t('checkString'); resultSub.textContent=t('checkStringHelp'); return;
+      }
+      tuneActive=Math.abs(cents)<=(tuneActive?8:5);
+      resultMain.textContent=t(tuneActive?'fitsCheck':cents<0?'tighten':'loosen');
+      resultSub.textContent=t(tuneActive?'stringInTune':cents<0?(Math.abs(cents)>100?'muchTooLow':'tightenLittle'):(Math.abs(cents)>100?'muchTooHigh':'loosenLittle'),{n:targetString});
+    } else {
+      const midi=69+12*Math.log2(freq/getA4());
+      // Note-label hysteresis avoids C/C-sharp flicker at a half-semitone boundary.
+      if(displayMidi===null || Math.abs((midi-displayMidi)*100)>57) {
+        displayMidi=Math.round(midi); tuneActive=false;
+      }
+      cents=(midi-displayMidi)*100;
+      noteEl.textContent=noteNames()[((displayMidi%12)+12)%12]+(Math.floor(displayMidi/12)-1);
+      frequencyEl.textContent=`${fmt1(freq)} Hz`;
+      tuneActive=Math.abs(cents)<=(tuneActive?7:4);
+      resultMain.textContent=t(tuneActive?'fits':cents<0?'tooLow':'tooHigh');
+      resultSub.textContent=t(tuneActive?'toneInTune':cents<0?'centsBelow':'centsAbove',{cents:Math.round(Math.abs(cents))});
+    }
+    setNeedle(cents,tuneActive);
+  }
+  function renderTracked(result) {
+    if(!result.hz) { showWaiting(result.state); return; }
+    updateDisplay(result.hz);
+    if(result.held) {
+      card.classList.add('held'); tuneActive=false;
+      resultMain.textContent=t('held'); resultSub.textContent=t('pluckSingle');
+      needleEl.style.background='var(--muted)'; needleEl.style.boxShadow='none';
+    }
+  }
+  function chooseString(button) {
+    targetString=Number(button.dataset.string); storage.set('guitartuner-string',String(targetString));
+    for(const b of stringButtons) { const selected=b===button; b.classList.toggle('active',selected); b.setAttribute('aria-pressed',String(selected)); }
+    updateTargetLine(); resetReading();
+  }
+  function setMode(nextMode) {
+    mode=nextMode==='beginner'?'beginner':'normal'; storage.set('guitartuner-mode',mode);
+    const beginner=mode==='beginner';
+    normalModeBtn.classList.toggle('active',!beginner); beginnerModeBtn.classList.toggle('active',beginner);
+    normalModeBtn.setAttribute('aria-pressed',String(!beginner)); beginnerModeBtn.setAttribute('aria-pressed',String(beginner));
+    beginnerPanel.classList.toggle('hidden',!beginner); chooseString(currentStringButton());
+  }
 
-  doneButton.addEventListener("click", closeSettings);
+  function showStartHint(key,error=false) {
+    hintKey=key; hintError=error; startHint.textContent=t(key);
+    startHint.classList.remove('hidden'); startHint.classList.toggle('error',error);
+  }
+  function hideStartHint() { hintKey=null; startHint.classList.add('hidden'); }
+  function liveTrack() { return stream?.getAudioTracks().find(track=>track.readyState==='live'); }
+  function syncAudioState() {
+    const track=liveTrack();
+    const ready=pageActive && !document.hidden && audioContext?.state==='running' && analyser && track && !track.muted;
+    micState.classList.toggle('active',Boolean(ready));
+    if(ready) {
+      if(!running) {
+        running=true; lastAnalysis=-Infinity; lastAudioTime=-1; resetReading();
+        if(animationId===null)animationId=requestAnimationFrame(tick);
+      }
+      hideStartHint();
+    } else {
+      if(running) { running=false; if(animationId!==null)cancelAnimationFrame(animationId); animationId=null; resetReading(); }
+      if(pageActive && !document.hidden && track && !requestPending)showStartHint('tapResume');
+    }
+  }
+  function ensureAudioContext() {
+    if(audioContext && audioContext.state!=='closed')return audioContext;
+    const Constructor=window.AudioContext || window.webkitAudioContext;
+    if(!Constructor)throw Object.assign(new Error('Web Audio unavailable'),{name:'NotSupportedError'});
+    audioContext=new Constructor({latencyHint:'interactive'});
+    audioContext.addEventListener('statechange',syncAudioState);
+    return audioContext;
+  }
+  function kickResume() {
+    if(!audioContext || audioContext.state==='closed')return;
+    // Never await resume as a startup gate. Browsers can leave its Promise
+    // pending until the NEXT gesture. Gestures must still be able to call it.
+    if(audioContext.state!=='running') {
+      try { audioContext.resume().then(syncAudioState).catch(()=>showStartHint('tapResume')); }
+      catch (_) { showStartHint('tapResume'); }
+    }
+    syncAudioState();
+  }
+  function disconnectGraph() {
+    for(const n of audioNodes)try{n.disconnect();}catch(_){}
+    audioNodes=[]; analyser=null; source=null; buffer=null; detector=null;
+  }
+  function buildGraph() {
+    if(analyser || !liveTrack())return;
+    const context=ensureAudioContext();
+    source=context.createMediaStreamSource(stream);
+    const hp=context.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=40; hp.Q.value=0.707;
+    const cutoff=Math.min(2800,context.sampleRate*.32);
+    const lp1=context.createBiquadFilter(); lp1.type='lowpass'; lp1.frequency.value=cutoff; lp1.Q.value=0.5412;
+    const lp2=context.createBiquadFilter(); lp2.type='lowpass'; lp2.frequency.value=cutoff; lp2.Q.value=1.3066;
+    detector=new GuitarTunerDSP.Detector(context.sampleRate);
+    analyser=context.createAnalyser();
+    analyser.fftSize=2**Math.ceil(Math.log2(Math.max(8192,detector.requiredSamples)));
+    analyser.smoothingTimeConstant=0;
+    // A zero-gain destination makes graph rendering explicit, without playing
+    // microphone audio through speakers (no acoustic feedback).
+    const silent=context.createGain(); silent.gain.value=0;
+    source.connect(hp); hp.connect(lp1); lp1.connect(lp2); lp2.connect(analyser);
+    analyser.connect(silent); silent.connect(context.destination);
+    audioNodes=[source,hp,lp1,lp2,analyser,silent]; buffer=new Float32Array(analyser.fftSize);
+    for(const track of stream.getAudioTracks()) {
+      track.addEventListener('ended',()=>{disconnectGraph();syncAudioState();if(pageActive)showStartHint('micEnded',true);});
+      track.addEventListener('mute',syncAudioState); track.addEventListener('unmute',()=>{kickResume();syncAudioState();});
+    }
+  }
+  function microphoneError(error) {
+    console.warn('GuitarTuner microphone:',error);
+    const key=['NotAllowedError','PermissionDeniedError','SecurityError'].includes(error.name)?'allowRetry':
+      ['NotFoundError','DevicesNotFoundError'].includes(error.name)?'noMic':
+      ['NotReadableError','TrackStartError'].includes(error.name)?'micBusy':
+      error.name==='NotSupportedError'?'micUnsupported':'micFailed';
+    showStartHint(key,true);
+  }
+  function requestMicrophone() {
+    if(!pageActive)return;
+    if(!window.isSecureContext){showStartHint('micHttps',true);return;}
+    if(!navigator.mediaDevices?.getUserMedia){showStartHint('micUnsupported',true);return;}
+    try { ensureAudioContext(); kickResume(); } catch(error) { microphoneError(error); return; }
+    if(liveTrack()) {try{buildGraph();kickResume();}catch(error){microphoneError(error);}return;}
+    // Mutex applies only to getUserMedia, never to user activation/resume.
+    if(requestPending)return;
+    const generation=requestGeneration;
+    showStartHint('micWaiting');
+    requestPending=navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true,channelCount:1},video:false});
+    requestPending.then(acquired=>{
+      if(generation!==requestGeneration || !pageActive){acquired.getTracks().forEach(track=>track.stop());return;}
+      stream=acquired; buildGraph();
+      if(audioContext.state!=='running')showStartHint('tapStart');
+      kickResume();
+    }).catch(error=>{if(generation===requestGeneration && pageActive)microphoneError(error);})
+      .finally(()=>{if(generation===requestGeneration){requestPending=null;syncAudioState();}});
+  }
+  function gestureStart(event) {
+    if(event.type==='keydown' && (event.repeat || ['Tab','Shift','Control','Alt','Meta','Escape'].includes(event.key)))return;
+    // Executes synchronously INSIDE the trusted event, even with a permission
+    // request or an old resume() Promise pending. No overlay and no preventDefault.
+    if(!running)requestMicrophone();
+  }
+  function releaseMicrophone() {
+    requestGeneration++; requestPending=null;
+    running=false; if(animationId!==null)cancelAnimationFrame(animationId); animationId=null;
+    disconnectGraph();
+    if(stream)stream.getTracks().forEach(track=>track.stop()); stream=null;
+    if(audioContext){try{audioContext.close().catch(()=>{});}catch(_){} audioContext=null;}
+    micState.classList.remove('active');
+  }
+  function tick(now) {
+    animationId=null;
+    if(!running || !analyser || !detector)return;
+    try {
+      if(now-lastAnalysis>=GuitarTunerDSP.CONFIG.intervalMs && audioContext.currentTime-lastAudioTime>=.03) {
+        lastAnalysis=now; lastAudioTime=audioContext.currentTime;
+        const before=performance.now();
+        analyser.getFloatTimeDomainData(buffer);
+        const frame=detector.analyze(buffer), tracked=tracker.update(frame,now);
+        renderTracked(tracked);
+        if(diagnosticsEnabled)appendDiagnostic(frame,tracked,now,performance.now()-before);
+      }
+    } catch(error) {
+      console.error('GuitarTuner analysis:',error); running=false; micState.classList.remove('active');
+      showStartHint('internalError',true); return;
+    }
+    animationId=requestAnimationFrame(tick);
+  }
 
-  settingsModal.addEventListener("click", event => {
-    if (event.target === settingsModal) closeSettings();
-  });
-
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && running && audioContext?.state === "suspended") {
-      audioContext.resume().then(() => {
-        if (audioContext.state !== "running") showStartHint(t("tapResume"));
-      }).catch(() => showStartHint(t("tapResume")));
+  function resetDiagnostics() {
+    diagnosticRows=[]; diagPosition=0; markerCount=0; nextMarker=0;
+    diagStarted=performance.now(); diagStartedISO=new Date().toISOString(); refreshDiagnostics();
+  }
+  function appendDiagnostic(frame,tracked,now,cost) {
+    const row={
+      timeMs:Math.round(now-diagStarted), audioTimeMs:Math.round(audioContext.currentTime*1000),
+      rms:frame.rms, recentRms:frame.recentRms, peak:frame.peak,
+      yinHz:frame.yinHz, candidateHz:frame.hz, clarity:frame.clarity, harmonicCoverage:frame.coverage,
+      corrected:frame.corrected, reason:frame.reason, state:tracked.state, displayedHz:tracked.hz,
+      displayedNote:noteEl.textContent.trim(), mode, targetHz:mode==='beginner'?targetFreq:null,
+      targetString:mode==='beginner'?targetString:null, referenceA4:getA4(), computeMs:Number(cost.toFixed(3)),
+      marker:nextMarker||null
+    };
+    nextMarker=0;
+    if(diagnosticRows.length<MAX_DIAGNOSTICS)diagnosticRows.push(row);
+    else{diagnosticRows[diagPosition]=row;diagPosition=(diagPosition+1)%MAX_DIAGNOSTICS;}
+    if(!settingsModal.classList.contains('hidden'))refreshDiagnostics();
+  }
+  function refreshDiagnostics() {
+    $('diagCount').textContent=t('diagCount',{n:diagnosticRows.length,marks:markerCount});
+    $('diagExport').disabled=!diagnosticRows.length;
+    $('diagClear').disabled=!diagnosticRows.length;
+    $('diagMark').disabled=!diagnosticsEnabled;
+    $('diagBadge').classList.toggle('hidden',!diagnosticsEnabled);
+    $('diagToggle').checked=diagnosticsEnabled;
+  }
+  async function exportDiagnostics() {
+    if(!diagnosticRows.length)return;
+    const rows=diagPosition?diagnosticRows.slice(diagPosition).concat(diagnosticRows.slice(0,diagPosition)):diagnosticRows.slice();
+    const settings=liveTrack()?.getSettings?.() || {};
+    const audioSettings={};
+    // Whitelist: no deviceId, groupId, labels, audio samples or browsing history.
+    for(const key of ['sampleRate','channelCount','echoCancellation','noiseSuppression','autoGainControl','latency'])if(key in settings)audioSettings[key]=settings[key];
+    const payload={schemaVersion:1,appVersion:GuitarTunerDSP.VERSION,startedAt:diagStartedISO,exportedAt:new Date().toISOString(),
+      sampleRate:audioContext?.sampleRate||null,analysisSampleRate:detector?.rate||null,
+      userAgent:navigator.userAgent,language,config:GuitarTunerDSP.CONFIG,audioSettings,
+      note:'Local diagnostic measurements only. No audio samples. Clarity and harmonic coverage are heuristic scores, not probabilities.',rows};
+    const text=JSON.stringify(payload,null,2),name=`guitartuner-v11-diagnose-${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
+    const file=new File([text],name,{type:'application/json'});
+    // On mobile a share sheet is convenient, desktop uses a normal download.
+    if(navigator.canShare && navigator.share && navigator.maxTouchPoints>0) {
+      try{if(navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'GuitarTuner diagnostics'});return;}}
+      catch(error){if(error.name==='AbortError')return;}
+    }
+    const url=URL.createObjectURL(file),a=document.createElement('a');
+    a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }
+  function openSettings() {
+    settingsModal.classList.remove('hidden');a4Input.value=String(referenceA4);refreshDiagnostics();$('settingsTitle').focus();
+  }
+  function closeSettings() {
+    const parsed=Number(a4Input.value);
+    if(Number.isFinite(parsed)&&parsed>=430&&parsed<=450)referenceA4=parsed;
+    a4Input.value=String(referenceA4);storage.set('guitartuner-a4',String(referenceA4));
+    settingsModal.classList.add('hidden');updateTargetLine();resetReading();$('settingsButton').focus();
+  }
+  for(const event of ['pointerup','touchend','click','keydown'])document.addEventListener(event,gestureStart,{passive:true});
+  normalModeBtn.addEventListener('click',()=>setMode('normal'));
+  beginnerModeBtn.addEventListener('click',()=>setMode('beginner'));
+  stringButtons.forEach(b=>b.addEventListener('click',()=>chooseString(b)));
+  $('settingsButton').addEventListener('click',openSettings);$('doneButton').addEventListener('click',closeSettings);
+  languageSelect.addEventListener('change',()=>applyLanguagePreference(languageSelect.value));
+  window.addEventListener('languagechange',()=>{if(languagePreference==='auto')applyLanguagePreference('auto');});
+  settingsModal.addEventListener('click',event=>{if(event.target===settingsModal)closeSettings();});
+  settingsModal.addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();closeSettings();}
+    if(event.key==='Tab'){
+      const focusables=[...settingsModal.querySelectorAll('button:not(:disabled), input, select, summary')].filter(el=>el.getClientRects().length);
+      const first=focusables[0],last=focusables[focusables.length-1];
+      if(event.shiftKey && (document.activeElement===first || document.activeElement===$('settingsTitle'))){event.preventDefault();last.focus();}
+      else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first.focus();}
     }
   });
-
-  applyStaticTranslations();
-
-  const initialString = stringButtons.find(btn => Number(btn.dataset.string) === targetString) || stringButtons[0];
-  targetFreq = Number(initialString.dataset.freq);
-  targetNote = initialString.dataset.note;
-
-  setMode(mode === "beginner" ? "beginner" : "normal");
-
-  requestMicrophone(true);
+  $('diagToggle').addEventListener('change',()=>{diagnosticsEnabled=$('diagToggle').checked;if(diagnosticsEnabled)resetDiagnostics();refreshDiagnostics();});
+  $('diagMark').addEventListener('click',()=>{nextMarker=++markerCount;refreshDiagnostics();});
+  $('diagClear').addEventListener('click',resetDiagnostics);
+  $('diagExport').addEventListener('click',()=>exportDiagnostics().catch(error=>console.error('Diagnostic export:',error)));
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)syncAudioState();else{requestMicrophone();syncAudioState();}});
+  window.addEventListener('pagehide',()=>{pageActive=false;releaseMicrophone();});
+  window.addEventListener('pageshow',event=>{pageActive=true;if(event.persisted)requestMicrophone();});
+  applyStaticTranslations();setMode(mode);requestMicrophone();
 })();
 
 </script>
